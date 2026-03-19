@@ -16,37 +16,40 @@ class TakeoutArchiveLocator {
   TakeoutArchiveLocator({
     required GoogleDriveService driveService,
     required SyncLogger logger,
-  })  : _driveService = driveService,
-        _logger = logger;
+  }) : _driveService = driveService,
+       _logger = logger;
 
   /// Find the latest Takeout archive group on Drive.
   /// Returns null if no archives found.
   Future<ArchiveGroup?> findLatestArchiveGroup() async {
+    final groups = await findArchiveGroupsSorted();
+    if (groups.isEmpty) return null;
+    return groups.first;
+  }
+
+  /// Find all Takeout archive groups sorted by latest created time, descending.
+  Future<List<ArchiveGroup>> findArchiveGroupsSorted() async {
     final files = await _driveService.listTakeoutArchives();
 
     if (files.isEmpty) {
       _logger.info('archive_locator_no_archives_found');
-      return null;
+      return const [];
     }
 
     // Group split archives together
     final groups = _groupArchiveFiles(files);
 
-    if (groups.isEmpty) return null;
+    if (groups.isEmpty) return const [];
 
     // Sort by latest created time, descending
-    groups.sort(
-        (a, b) => b.latestCreatedTime.compareTo(a.latestCreatedTime));
+    groups.sort((a, b) => b.latestCreatedTime.compareTo(a.latestCreatedTime));
 
-    final latest = groups.first;
-
-    _logger.info('archive_locator_selected', {
-      'identifier': latest.identifier,
-      'fileCount': latest.files.length,
-      'totalSizeBytes': latest.totalSizeBytes,
+    _logger.info('archive_locator_candidates_built', {
+      'groupCount': groups.length,
+      'latestIdentifier': groups.first.identifier,
     });
 
-    return latest;
+    return groups;
   }
 
   /// Group archive files by their base name (handling split archives).
@@ -59,8 +62,7 @@ class TakeoutArchiveLocator {
     }
 
     return groupMap.entries.map((entry) {
-      final groupFiles = entry.value
-        ..sort((a, b) => a.name.compareTo(b.name));
+      final groupFiles = entry.value..sort((a, b) => a.name.compareTo(b.name));
 
       return ArchiveGroup(
         identifier: _generateIdentifier(groupFiles),
