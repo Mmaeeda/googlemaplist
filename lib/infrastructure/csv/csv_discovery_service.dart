@@ -26,17 +26,30 @@ class CsvDiscoveryService {
 
   // Header columns that indicate a Saved-places CSV
   static const _scoredHeaders = {
+    // English
     'title': 3,
     'note': 2,
     'comments': 2,
+    'comment': 2,
     'item_content_url': 3,
     'collection_name': 2,
     'collection_description': 1,
     'url': 2,
+    'updated': 1,
+    // Japanese
+    'タイトル': 3,
+    'メモ': 2,
+    'コメント': 2,
+    '説明': 1,
   };
 
   // Filename patterns that boost score
-  static const _fileNamePatterns = ['saved', 'maps', 'places', 'locations'];
+  static const _fileNamePatterns = [
+    // English
+    'saved', 'maps', 'places', 'locations',
+    // Japanese
+    '保存', 'マップ', '場所', 'マイプレイス', 'お気に入り', '行きたい', 'スター',
+  ];
 
   CsvDiscoveryService(this._logger);
 

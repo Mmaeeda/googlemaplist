@@ -6,20 +6,28 @@ import '../../domain/models/normalized_place_record.dart';
 class PlaceNormalizer {
   // Mapping from possible CSV header names to our internal field names
   static const _headerMappings = {
-    'sourceTitle': ['title', 'name', 'place_name', 'source_title'],
-    'mapsUrl': [
-      'url',
-      'item_content_url',
-      'maps_url',
-      'link',
-      'google_maps_url'
+    'sourceTitle': [
+      'title', 'name', 'place_name', 'source_title',
+      'タイトル', '名前', '場所名',
     ],
-    'note': ['note', 'notes', 'memo'],
-    'comments': ['comments', 'comment', 'description'],
-    'collectionName': ['collection_name', 'list_name', 'list', 'collection'],
+    'mapsUrl': [
+      'url', 'item_content_url', 'maps_url', 'link', 'google_maps_url',
+    ],
+    'note': [
+      'note', 'notes', 'memo',
+      'メモ', 'ノート',
+    ],
+    'comments': [
+      'comments', 'comment', 'description',
+      'コメント', '説明',
+    ],
+    'collectionName': [
+      'collection_name', 'list_name', 'list', 'collection',
+      'コレクション名', 'リスト名',
+    ],
     'collectionDescription': [
-      'collection_description',
-      'list_description',
+      'collection_description', 'list_description',
+      'コレクション説明', 'リスト説明',
     ],
   };
 

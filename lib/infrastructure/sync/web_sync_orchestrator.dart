@@ -41,16 +41,29 @@ class WebSyncOrchestrator implements SyncPipeline {
 
   // CSV discovery scoring (same logic as CsvDiscoveryService)
   static const _scoredHeaders = {
+    // English headers
     'title': 3,
     'note': 2,
     'comments': 2,
+    'comment': 2,
     'item_content_url': 3,
     'collection_name': 2,
     'collection_description': 1,
     'url': 2,
+    'updated': 1,
+    // Japanese headers
+    'タイトル': 3,
+    'メモ': 2,
+    'コメント': 2,
+    '説明': 1,
   };
 
-  static const _fileNamePatterns = ['saved', 'maps', 'places', 'locations'];
+  static const _fileNamePatterns = [
+    // English
+    'saved', 'maps', 'places', 'locations',
+    // Japanese
+    '保存', 'マップ', '場所', 'マイプレイス', 'お気に入り', '行きたい', 'スター',
+  ];
 
   WebSyncOrchestrator({
     required TakeoutArchiveLocator archiveLocator,
@@ -199,9 +212,24 @@ class WebSyncOrchestrator implements SyncPipeline {
       });
 
       if (csvCandidates.isEmpty) {
-        throw const AppError(
+        // Collect diagnostic info: list ALL csv files found in the ZIP
+        final allCsvNames = <String>[];
+        for (final file in archiveGroup.files) {
+          try {
+            final zipBytes = await _driveService.downloadFile(file.fileId);
+            final diag = ZipDecoder().decodeBytes(zipBytes);
+            for (final e in diag) {
+              if (e.isFile && e.name.toLowerCase().endsWith('.csv')) {
+                allCsvNames.add(e.name);
+              }
+            }
+          } catch (_) {}
+        }
+
+        throw AppError(
           AppErrorCode.csvNotFound,
-          'No Saved-places CSV found in archive',
+          'アーカイブ内に対象CSVが見つかりません。\n'
+          'ZIP内のCSVファイル: ${allCsvNames.isEmpty ? "なし" : allCsvNames.join(", ")}',
         );
       }
 

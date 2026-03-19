@@ -116,11 +116,12 @@ class CsvParser {
   }
 
   /// Normalize header names to a canonical form.
+  /// Preserves Unicode characters (Japanese etc.) while cleaning whitespace.
   String _normalizeHeader(String header) {
     return header
         .trim()
         .toLowerCase()
         .replaceAll(RegExp(r'\s+'), '_')
-        .replaceAll(RegExp(r'[^\w]'), '');
+        .replaceAll(RegExp(r'[^\w]', unicode: true), '');
   }
 }
