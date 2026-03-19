@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/sync_job.dart';
+import '../../domain/models/sync_summary.dart';
 import '../providers/dashboard_providers.dart';
 import '../theme/app_colors.dart';
 
@@ -92,6 +93,59 @@ class DashboardScreen extends ConsumerWidget {
                         Expanded(child: _StatCard(title: '最終同期', value: lastSyncValue, icon: Icons.access_time, iconColor: AppColors.googleRed)),
                       ],
                     ),
+              // Sync error display
+              if (syncAction is AsyncError)
+                Padding(
+                  padding: EdgeInsets.only(bottom: isMobile ? 16 : 24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.googleRed.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.googleRed.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.error_outline, color: AppColors.googleRed, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '同期エラー: ${(syncAction as AsyncError).error}',
+                            style: const TextStyle(color: AppColors.googleRed, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              // Sync success display
+              if (syncAction case AsyncData<SyncSummary?>(:final value?))
+                Padding(
+                  padding: EdgeInsets.only(bottom: isMobile ? 16 : 24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_outline, color: AppColors.primary, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '同期完了: 新規${value.newCount}件 / 更新${value.updatedCount}件 / 未変更${value.unchangedCount}件',
+                            style: TextStyle(color: AppColors.primary, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               SizedBox(height: isMobile ? 24 : 32),
               Text(
                 '最近のアクティビティ',
