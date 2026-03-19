@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/app_error.dart';
 import '../../domain/models/sync_job.dart';
 import '../../domain/models/sync_summary.dart';
 import 'core_providers.dart';
@@ -47,6 +48,15 @@ class SyncActionNotifier extends Notifier<AsyncValue<SyncSummary?>> {
       ref.invalidate(placeCountProvider);
       ref.invalidate(ruleCountProvider);
       ref.invalidate(lastSyncJobProvider);
+    } on AppError catch (e, st) {
+      if (e.code == AppErrorCode.tokenExpired ||
+          e.code == AppErrorCode.authRequired) {
+        // Token expired → sign out so user is redirected to login screen
+        await ref.read(authStateProvider.notifier).signOut();
+        state = const AsyncData(null);
+      } else {
+        state = AsyncError(e, st);
+      }
     } catch (e, st) {
       state = AsyncError(e, st);
     }
