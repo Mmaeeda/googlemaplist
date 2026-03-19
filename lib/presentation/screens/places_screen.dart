@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../domain/models/group.dart';
 import '../models/place_with_groups.dart';
 import '../providers/places_providers.dart';
@@ -157,8 +158,19 @@ class _PlaceList extends StatelessWidget {
             isThreeLine: subtitle.contains('\n'),
             trailing: Wrap(
               spacing: 8,
-              children: item.groups.map((group) => _GroupChip(group: group)).toList(),
+              children: [
+                ...item.groups.map((group) => _GroupChip(group: group)),
+                if (place.mapsUrl != null)
+                  const Icon(Icons.open_in_new,
+                      size: 16, color: AppColors.textSecondary),
+              ],
             ),
+            onTap: place.mapsUrl != null
+                ? () => launchUrl(
+                      Uri.parse(place.mapsUrl!),
+                      mode: LaunchMode.externalApplication,
+                    )
+                : null,
           );
         },
       ),

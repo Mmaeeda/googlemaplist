@@ -24,6 +24,7 @@ import '../../infrastructure/supabase/supabase_sync_job_repository.dart';
 import '../../infrastructure/sync/diff_applier.dart';
 import '../../infrastructure/sync/diff_engine.dart';
 import '../../infrastructure/sync/source_key_generator.dart';
+import '../../infrastructure/sync/sync_pipeline.dart';
 import '../../infrastructure/sync/web_sync_orchestrator.dart';
 
 // Database (stub for web — not used, but required for type compatibility)
@@ -129,10 +130,13 @@ final webSyncOrchestratorProvider = Provider<WebSyncOrchestrator>((ref) =>
     ));
 
 // Sync pipeline (common interface for dashboard)
+// Always force sync when user explicitly triggers via UI button.
 final syncPipelineRunProvider =
     Provider<Future<SyncSummary> Function()>((ref) {
   final orchestrator = ref.watch(webSyncOrchestratorProvider);
-  return () => orchestrator.runSync();
+  return () => orchestrator.runSync(
+        const SyncPipelineOptions(forceSync: true),
+      );
 });
 
 // Auth state

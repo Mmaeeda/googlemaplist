@@ -68,6 +68,27 @@ class GeoJsonParser {
     // Handle FeatureCollection
     final features = json['features'] as List<dynamic>? ?? [];
 
+    // Log property keys of first feature for diagnostics
+    if (features.isNotEmpty) {
+      try {
+        final firstFeature = features[0] as Map<String, dynamic>;
+        final firstProps =
+            firstFeature['properties'] as Map<String, dynamic>? ?? {};
+        _logger.info('geojson_first_feature_keys', {
+          'fileName': fileName,
+          'propertyKeys': firstProps.keys.toList(),
+          'hasGeometry': firstFeature.containsKey('geometry'),
+          'locationKeys': firstProps['Location'] is Map
+              ? (firstProps['Location'] as Map).keys.toList()
+              : firstProps['場所'] is Map
+                  ? (firstProps['場所'] as Map).keys.toList()
+                  : <String>[],
+        });
+      } catch (_) {
+        // Diagnostic only — ignore errors
+      }
+    }
+
     for (var i = 0; i < features.length; i++) {
       try {
         final feature = features[i] as Map<String, dynamic>;
@@ -99,18 +120,51 @@ class GeoJsonParser {
 
   NormalizedPlaceRecord? _parseFeature(Map<String, dynamic> feature) {
     final props = feature['properties'] as Map<String, dynamic>? ?? {};
+    final geometry = feature['geometry'] as Map<String, dynamic>?;
 
-    // Extract title (try multiple field names)
-    final title = _findString(props, [
+    // Extract title (try multiple field names at top level)
+    var title = _findString(props, [
       'Title', 'title', 'Name', 'name',
       'タイトル', '名前',
     ]);
 
     // Extract Google Maps URL
-    final mapsUrl = _findString(props, [
+    var mapsUrl = _findString(props, [
       'Google Maps URL', 'google_maps_url', 'URL', 'url',
       'Google マップの URL',
     ]);
+
+    // Extract Location object (English or Japanese key)
+    final location = (props['Location'] ?? props['場所'])
+        as Map<String, dynamic>?;
+
+    // If no title at top level, try nested Location.Business Name
+    if (title == null && location != null) {
+      title = _findString(location, [
+        'Business Name', 'business_name', 'Name', 'name',
+        'ビジネス名', '名前', '店名',
+      ]);
+    }
+
+    // Extract address from Location object
+    String? address;
+    if (location != null) {
+      address = _findString(location, [
+        'Address', 'address', '住所',
+      ]);
+    }
+
+    // If no Maps URL found, construct from geometry coordinates
+    if (mapsUrl == null && geometry != null) {
+      final coords = geometry['coordinates'] as List<dynamic>?;
+      if (coords != null && coords.length >= 2) {
+        final lng = coords[0];
+        final lat = coords[1];
+        if (lng is num && lat is num) {
+          mapsUrl = 'https://www.google.com/maps?q=$lat,$lng';
+        }
+      }
+    }
 
     // Skip entries with no title and no URL
     if (title == null && mapsUrl == null) return null;
@@ -126,19 +180,6 @@ class GeoJsonParser {
       'Description', 'description',
       'コメント', '説明',
     ]);
-
-    // Extract address from Location object
-    final location = props['Location'] as Map<String, dynamic>?;
-    String? address;
-    if (location != null) {
-      address = _findString(location, [
-        'Address', 'address', '住所',
-      ]);
-    }
-
-    // Use the filename (without extension) as collection name
-    // e.g., "保存済みの場所.json" → "保存済みの場所"
-    // This is set by the caller, not here
 
     return NormalizedPlaceRecord(
       sourceTitle: title,
