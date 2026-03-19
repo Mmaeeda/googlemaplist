@@ -7,16 +7,28 @@ import 'auth_token_provider.dart';
 /// Supabase Auth + Google OAuth for web.
 /// Uses `session.providerToken` to get a Google access token for Drive API.
 ///
-/// Note: `signInWithOAuth` triggers a browser redirect.
-/// After the redirect, Supabase restores the session automatically.
-/// The `providerToken` (Google access token) is available only after
-/// the redirect callback and expires after ~1 hour.
+/// Provider token lifecycle:
+/// 1. Obtained on OAuth redirect (expires after ~1 hour)
+/// 2. Cached in memory for reuse within the session
+/// 3. On expiry, attempts refresh via Supabase GoTrue
+/// 4. If refresh fails, triggers re-authentication
 class SupabaseAuthService implements AuthTokenProvider {
   final SyncLogger _logger;
+
+  /// In-memory cache of the Google provider token.
+  String? _cachedProviderToken;
+  DateTime? _cachedTokenTime;
 
   SupabaseAuthService({required SyncLogger logger}) : _logger = logger;
 
   SupabaseClient get _client => Supabase.instance.client;
+
+  /// Cache the provider token when first obtained (e.g. from onAuthStateChange).
+  void cacheProviderToken(String token) {
+    _cachedProviderToken = token;
+    _cachedTokenTime = DateTime.now();
+    _logger.info('provider_token_cached');
+  }
 
   /// Sign in with Google via Supabase Auth.
   /// This triggers a browser redirect for OAuth — the page will reload.
@@ -63,14 +75,16 @@ class SupabaseAuthService implements AuthTokenProvider {
     _logger.info('supabase_auth_check_completed');
   }
 
-  /// Get the Google provider token from the Supabase session.
-  /// This is the Google access token needed for Drive API calls.
+  /// Get the Google provider token for Drive API calls.
   ///
-  /// The provider token is only available immediately after OAuth sign-in
-  /// and expires after ~1 hour. If expired, re-authentication is required.
+  /// Attempts in order:
+  /// 1. Current session's providerToken (set right after OAuth redirect)
+  /// 2. Cached in-memory token (within ~55 min of caching)
+  /// 3. Refresh session via Supabase GoTrue (may return new providerToken)
+  /// 4. Throw tokenExpired → triggers re-authentication
   @override
   Future<String> getAccessToken() async {
-    final session = _client.auth.currentSession;
+    var session = _client.auth.currentSession;
 
     if (session == null) {
       throw const AppError(
@@ -79,43 +93,47 @@ class SupabaseAuthService implements AuthTokenProvider {
       );
     }
 
-    // If the Supabase session itself is expired, try refreshing
-    if (session.isExpired) {
-      _logger.info('supabase_session_expired_refreshing');
-      try {
-        await _client.auth.refreshSession();
-      } catch (e) {
-        _logger.error('supabase_session_refresh_failed', {
-          'error': e.toString(),
+    // 1. Session's provider token (available right after OAuth)
+    if (session.providerToken != null) {
+      cacheProviderToken(session.providerToken!);
+      return session.providerToken!;
+    }
+
+    // 2. Cached in-memory token (survives within the same page session)
+    if (_cachedProviderToken != null && _cachedTokenTime != null) {
+      final tokenAge = DateTime.now().difference(_cachedTokenTime!);
+      if (tokenAge.inMinutes < 55) {
+        _logger.info('using_cached_provider_token', {
+          'ageMinutes': tokenAge.inMinutes,
         });
-        throw AppError(
-          AppErrorCode.tokenExpired,
-          'Session expired and refresh failed. Please sign in again.',
-          e,
-        );
+        return _cachedProviderToken!;
       }
+      _logger.info('cached_provider_token_expired', {
+        'ageMinutes': tokenAge.inMinutes,
+      });
+      _cachedProviderToken = null;
+      _cachedTokenTime = null;
     }
 
-    final refreshedSession = _client.auth.currentSession;
-    if (refreshedSession == null) {
-      throw const AppError(
-        AppErrorCode.authRequired,
-        'Session lost after refresh.',
-      );
+    // 3. Try refreshing via Supabase GoTrue
+    _logger.info('provider_token_missing_attempting_refresh');
+    try {
+      final response = await _client.auth.refreshSession();
+      session = response.session;
+      if (session?.providerToken != null) {
+        _logger.info('provider_token_refreshed_via_gotrue');
+        cacheProviderToken(session!.providerToken!);
+        return session.providerToken!;
+      }
+    } catch (e) {
+      _logger.warn('session_refresh_failed', {'error': e.toString()});
     }
 
-    final providerToken = refreshedSession.providerToken;
-    if (providerToken == null) {
-      // Provider token is only set at initial OAuth sign-in.
-      // It is NOT refreshed by Supabase session refresh.
-      throw const AppError(
-        AppErrorCode.tokenExpired,
-        'Google provider token not available. '
-            'Re-authentication required (provider tokens expire after ~1 hour).',
-      );
-    }
-
-    return providerToken;
+    // 4. All attempts failed
+    throw const AppError(
+      AppErrorCode.tokenExpired,
+      'Googleトークンの有効期限が切れました。再ログインしてください。',
+    );
   }
 
   @override

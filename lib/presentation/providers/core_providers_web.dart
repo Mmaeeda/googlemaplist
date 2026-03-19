@@ -152,8 +152,14 @@ class AuthStateNotifier extends AsyncNotifier<bool> {
       final isSignedIn = data.session != null;
       state = AsyncData(isSignedIn);
       if (isSignedIn) {
+        final authService = ref.read(supabaseAuthServiceProvider);
+        // Cache provider token for reuse across sync operations
+        final providerToken = data.session!.providerToken;
+        if (providerToken != null) {
+          authService.cacheProviderToken(providerToken);
+        }
         // Seed default data on first login
-        ref.read(supabaseAuthServiceProvider).seedIfNeeded();
+        authService.seedIfNeeded();
       }
     });
     return client.auth.currentSession != null;
