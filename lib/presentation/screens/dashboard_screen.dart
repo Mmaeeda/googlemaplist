@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/sync_job.dart';
 import '../../domain/models/sync_summary.dart';
+import '../providers/core_providers.dart';
 import '../providers/dashboard_providers.dart';
 import '../theme/app_colors.dart';
 
@@ -55,20 +56,33 @@ class DashboardScreen extends ConsumerWidget {
                           fontSize: isMobile ? 24 : null,
                         ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: isSyncing
-                        ? null
-                        : () => ref.read(syncActionProvider.notifier).runSync(),
-                    icon: isSyncing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.sync),
-                    label: isMobile
-                        ? const Text('')
-                        : Text(isSyncing ? '同期中...' : '今すぐ同期'),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: isSyncing
+                            ? null
+                            : () => ref.read(syncActionProvider.notifier).runSync(),
+                        icon: isSyncing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.sync),
+                        label: isMobile
+                            ? const Text('')
+                            : Text(isSyncing ? '同期中...' : '今すぐ同期'),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => ref.read(authStateProvider.notifier).signOut(),
+                        icon: const Icon(Icons.logout),
+                        tooltip: 'ログアウト',
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
