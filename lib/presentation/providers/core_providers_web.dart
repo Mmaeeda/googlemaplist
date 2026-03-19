@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/models/sync_summary.dart';
 import '../../domain/repositories/classification_rule_repository.dart';
@@ -128,3 +129,38 @@ final syncPipelineRunProvider =
   final orchestrator = ref.watch(webSyncOrchestratorProvider);
   return () => orchestrator.runSync();
 });
+
+// Auth state
+final authStateProvider =
+    AsyncNotifierProvider<AuthStateNotifier, bool>(AuthStateNotifier.new);
+
+class AuthStateNotifier extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() async {
+    final client = Supabase.instance.client;
+    // Listen for auth state changes (e.g. after OAuth redirect)
+    client.auth.onAuthStateChange.listen((data) {
+      final isSignedIn = data.session != null;
+      state = AsyncData(isSignedIn);
+      if (isSignedIn) {
+        // Seed default data on first login
+        ref.read(supabaseAuthServiceProvider).seedIfNeeded();
+      }
+    });
+    return client.auth.currentSession != null;
+  }
+
+  Future<void> signIn() async {
+    state = const AsyncLoading();
+    try {
+      await ref.read(supabaseAuthServiceProvider).ensureAuthenticated();
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+
+  Future<void> signOut() async {
+    await ref.read(supabaseAuthServiceProvider).signOut();
+    state = const AsyncData(false);
+  }
+}

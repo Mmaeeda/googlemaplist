@@ -39,3 +39,18 @@ final syncLoggerProvider = Provider<SyncLogger>((ref) =>
 final syncPipelineRunProvider =
     Provider<Future<SyncSummary> Function()>((ref) =>
         throw UnsupportedError('Platform not supported'));
+
+final authStateProvider =
+    AsyncNotifierProvider<AuthStateNotifier, bool>(AuthStateNotifier.new);
+
+class AuthStateNotifier extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() async =>
+      throw UnsupportedError('Platform not supported');
+
+  Future<void> signIn() async =>
+      throw UnsupportedError('Platform not supported');
+
+  Future<void> signOut() async =>
+      throw UnsupportedError('Platform not supported');
+}
