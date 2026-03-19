@@ -49,6 +49,10 @@ class SupabaseAuthService implements AuthTokenProvider {
         OAuthProvider.google,
         scopes: 'https://www.googleapis.com/auth/drive.readonly',
         redirectTo: _getRedirectUrl(),
+        queryParams: {
+          'prompt': 'consent',
+          'access_type': 'offline',
+        },
       );
       // Note: execution may not reach here because the browser redirects.
     } catch (e) {
