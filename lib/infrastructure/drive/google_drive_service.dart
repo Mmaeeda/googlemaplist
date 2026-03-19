@@ -30,13 +30,59 @@ class GoogleDriveService {
 
     final headers = await _authService.getAuthHeaders();
 
-    // Search for ZIP files with "takeout" in name, not trashed
-    final query = Uri.encodeComponent(
+    // Primary search: ZIP files with "takeout" in name
+    var files = await _searchFiles(
+      headers,
       "mimeType='application/zip' and name contains 'takeout' and trashed=false",
     );
-    final fields = Uri.encodeComponent(
-      'files(id,name,size,createdTime)',
-    );
+
+    // Fallback 1: any file with "takeout" in name (might not be application/zip)
+    if (files.isEmpty) {
+      _logger.info('drive_fallback_search_any_takeout');
+      files = await _searchFiles(
+        headers,
+        "name contains 'takeout' and trashed=false",
+      );
+      // Filter to only zip-like files
+      files = files.where((f) => f.name.toLowerCase().endsWith('.zip')).toList();
+    }
+
+    // Fallback 2: any ZIP file at all (diagnostic)
+    if (files.isEmpty) {
+      _logger.info('drive_fallback_search_any_zip');
+      final allZips = await _searchFiles(
+        headers,
+        "mimeType='application/zip' and trashed=false",
+      );
+      final allFileNames = allZips.map((f) => f.name).take(10).toList();
+
+      // Also check for any files at all (to verify Drive access works)
+      final anyFiles = await _searchFiles(headers, "trashed=false");
+
+      throw AppError(
+        AppErrorCode.archiveNotFound,
+        'Takeoutアーカイブが見つかりません。\n'
+        'Drive上のZIPファイル数: ${allZips.length}\n'
+        'Drive上の全ファイル数: ${anyFiles.length}\n'
+        '${allZips.isNotEmpty ? 'ZIP名: ${allFileNames.join(", ")}' : ''}\n'
+        'ヒント: Google Takeoutで配信先を「Googleドライブに追加」にしてエクスポートしてください。',
+      );
+    }
+
+    _logger.info('drive_archive_search_completed', {
+      'fileCount': files.length,
+    });
+
+    return files;
+  }
+
+  /// Execute a Drive API file search with the given query.
+  Future<List<ArchiveFile>> _searchFiles(
+    Map<String, String> headers,
+    String queryString,
+  ) async {
+    final query = Uri.encodeComponent(queryString);
+    final fields = Uri.encodeComponent('files(id,name,size,createdTime)');
 
     final url = '$_driveApiBase/files?q=$query&fields=$fields'
         '&orderBy=createdTime desc&pageSize=50';
@@ -53,17 +99,11 @@ class GoogleDriveService {
     if (response.statusCode != 200) {
       throw AppError(
         AppErrorCode.downloadFailed,
-        'Drive API search failed: ${response.statusCode}',
+        'Drive API search failed: ${response.statusCode} ${response.body}',
       );
     }
 
-    final files = _parseFileListResponse(response.body);
-
-    _logger.info('drive_archive_search_completed', {
-      'fileCount': files.length,
-    });
-
-    return files;
+    return _parseFileListResponse(response.body);
   }
 
   /// Download a file from Drive by its file ID.
