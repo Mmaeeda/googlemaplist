@@ -212,15 +212,15 @@ class WebSyncOrchestrator implements SyncPipeline {
       });
 
       if (csvCandidates.isEmpty) {
-        // Collect diagnostic info: list ALL csv files found in the ZIP
-        final allCsvNames = <String>[];
+        // Collect diagnostic info: list ALL files found in the ZIP
+        final allFileNames = <String>[];
         for (final file in archiveGroup.files) {
           try {
             final zipBytes = await _driveService.downloadFile(file.fileId);
             final diag = ZipDecoder().decodeBytes(zipBytes);
             for (final e in diag) {
-              if (e.isFile && e.name.toLowerCase().endsWith('.csv')) {
-                allCsvNames.add(e.name);
+              if (e.isFile) {
+                allFileNames.add(e.name);
               }
             }
           } catch (_) {}
@@ -229,7 +229,8 @@ class WebSyncOrchestrator implements SyncPipeline {
         throw AppError(
           AppErrorCode.csvNotFound,
           'アーカイブ内に対象CSVが見つかりません。\n'
-          'ZIP内のCSVファイル: ${allCsvNames.isEmpty ? "なし" : allCsvNames.join(", ")}',
+          'ZIP内の全ファイル(${allFileNames.length}件): '
+          '${allFileNames.isEmpty ? "なし" : allFileNames.join(", ")}',
         );
       }
 
