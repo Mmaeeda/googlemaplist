@@ -121,69 +121,35 @@ class WebSyncOrchestrator implements SyncPipeline {
     await _syncJobRepository.start(job);
 
     try {
-      // Step 1: Find candidate archives (latest first)
-      final archiveGroups = await _archiveLocator.findArchiveGroupsSorted();
-      if (archiveGroups.isEmpty) {
+      // Step 1: Find latest archive
+      final archiveGroup = await _archiveLocator.findLatestArchiveGroup();
+      if (archiveGroup == null) {
         throw const AppError(
           AppErrorCode.archiveNotFound,
           'No Takeout archives found on Drive',
         );
       }
 
-      // Step 2: Find the latest archive group that contains parseable CSV candidates.
-      ArchiveGroup? archiveGroup;
-      var csvCandidates = <InMemoryCsvCandidate>[];
-      var checkedGroupCount = 0;
-      var oversizedGroupCount = 0;
-      var lastDiagnosticFiles = <String>[];
-
-      for (final candidateGroup in archiveGroups) {
-        checkedGroupCount++;
-
-        if (candidateGroup.totalSizeBytes > _maxTotalArchiveSize) {
-          oversizedGroupCount++;
-          logger.warn('archive_skipped_too_large', {
-            'archiveName': candidateGroup.displayName,
-            'sizeBytes': candidateGroup.totalSizeBytes,
-            'maxBytes': _maxTotalArchiveSize,
-          });
-          continue;
-        }
-
-        final discovery = await _discoverCsvCandidates(candidateGroup, logger);
-        lastDiagnosticFiles = discovery.allFileNames;
-
-        if (discovery.csvCandidates.isNotEmpty) {
-          archiveGroup = candidateGroup;
-          csvCandidates = discovery.csvCandidates;
-          logger.info('archive_with_csv_selected', {
-            'archiveName': archiveGroup.displayName,
-            'archiveIdentifier': archiveGroup.identifier,
-            'csvCandidateCount': csvCandidates.length,
-          });
-          break;
-        }
-
-        logger.warn('archive_skipped_no_relevant_csv', {
-          'archiveName': candidateGroup.displayName,
-          'allFileCount': discovery.allFileNames.length,
-        });
+      // Step 2: Size guard
+      if (archiveGroup.totalSizeBytes > _maxTotalArchiveSize) {
+        throw AppError(
+          AppErrorCode.downloadFailed,
+          'Archive too large for web processing: '
+          '${archiveGroup.totalSizeBytes} bytes exceeds '
+          '$_maxTotalArchiveSize byte limit',
+        );
       }
 
-      if (archiveGroup == null) {
-        if (oversizedGroupCount == archiveGroups.length) {
-          throw AppError(
-            AppErrorCode.downloadFailed,
-            'Drive上のTakeoutアーカイブがすべてサイズ上限超過です。\n'
-            '上限: $_maxTotalArchiveSize bytes\n'
-            '対象件数: ${archiveGroups.length}',
-          );
-        }
+      // Step 2.5: Discover data files (CSV and JSON)
+      final discovery = await _discoverCsvCandidates(archiveGroup, logger);
+      final csvCandidates = discovery.csvCandidates;
+
+      if (csvCandidates.isEmpty) {
         throw AppError(
           AppErrorCode.csvNotFound,
-          '確認したTakeoutアーカイブ($checkedGroupCount件)内に対象CSVが見つかりません。\n'
-          '最後に確認したZIP内の全ファイル(${lastDiagnosticFiles.length}件): '
-          '${lastDiagnosticFiles.isEmpty ? "なし" : lastDiagnosticFiles.join(", ")}',
+          'アーカイブ内に対象データファイルが見つかりません。\n'
+          'ZIP内の全ファイル(${discovery.allFileNames.length}件): '
+          '${discovery.allFileNames.isEmpty ? "なし" : discovery.allFileNames.join(", ")}',
         );
       }
 
