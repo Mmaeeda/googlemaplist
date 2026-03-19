@@ -10,6 +10,7 @@ import '../../domain/repositories/sync_job_repository.dart';
 import '../../infrastructure/auth/supabase_auth_service.dart';
 import '../../infrastructure/classification/classification_engine.dart';
 import '../../infrastructure/csv/csv_parser.dart';
+import '../../infrastructure/csv/geojson_parser.dart';
 import '../../infrastructure/csv/place_normalizer.dart';
 import '../../infrastructure/database/app_database.dart';
 import '../../infrastructure/drive/google_drive_service.dart';
@@ -76,6 +77,9 @@ final csvParserProvider = Provider<CsvParser>((ref) =>
 final placeNormalizerProvider = Provider<PlaceNormalizer>((ref) =>
     PlaceNormalizer());
 
+final geoJsonParserProvider = Provider<GeoJsonParser>((ref) =>
+    GeoJsonParser(ref.watch(syncLoggerProvider)));
+
 // Sync
 final sourceKeyGeneratorProvider = Provider<SourceKeyGenerator>((ref) =>
     SourceKeyGenerator());
@@ -115,6 +119,7 @@ final webSyncOrchestratorProvider = Provider<WebSyncOrchestrator>((ref) =>
       archiveLocator: ref.watch(takeoutArchiveLocatorProvider),
       driveService: ref.watch(googleDriveServiceProvider),
       csvParser: ref.watch(csvParserProvider),
+      geoJsonParser: ref.watch(geoJsonParserProvider),
       normalizer: ref.watch(placeNormalizerProvider),
       diffEngine: ref.watch(diffEngineProvider),
       diffApplier: ref.watch(diffApplierProvider),

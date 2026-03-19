@@ -5,12 +5,14 @@ import 'package:archive/archive.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../domain/models/app_error.dart';
+import '../../domain/models/archive_descriptor.dart';
 import '../../domain/models/normalized_place_record.dart';
 import '../../domain/models/sync_job.dart';
 import '../../domain/models/sync_summary.dart';
 import '../../domain/repositories/sync_job_repository.dart';
 import '../classification/classification_engine.dart';
 import '../csv/csv_parser.dart';
+import '../csv/geojson_parser.dart';
 import '../csv/place_normalizer.dart';
 import '../drive/google_drive_service.dart';
 import '../drive/takeout_archive_locator.dart';
@@ -21,7 +23,7 @@ import 'in_memory_csv_candidate.dart';
 import 'sync_pipeline.dart';
 
 /// Web sync orchestrator: fully in-memory, no dart:io.
-/// Downloads ZIP from Drive → decodes in memory → parses CSV → diff → apply.
+/// Downloads ZIP from Drive → decodes in memory → parses CSV/GeoJSON → diff → apply.
 class WebSyncOrchestrator implements SyncPipeline {
   static const _uuid = Uuid();
 
@@ -32,6 +34,7 @@ class WebSyncOrchestrator implements SyncPipeline {
   final TakeoutArchiveLocator _archiveLocator;
   final GoogleDriveService _driveService;
   final CsvParser _csvParser;
+  final GeoJsonParser _geoJsonParser;
   final PlaceNormalizer _normalizer;
   final DiffEngine _diffEngine;
   final DiffApplier _diffApplier;
@@ -69,25 +72,28 @@ class WebSyncOrchestrator implements SyncPipeline {
     required TakeoutArchiveLocator archiveLocator,
     required GoogleDriveService driveService,
     required CsvParser csvParser,
+    required GeoJsonParser geoJsonParser,
     required PlaceNormalizer normalizer,
     required DiffEngine diffEngine,
     required DiffApplier diffApplier,
     required ClassificationOrchestrator classificationOrchestrator,
     required SyncJobRepository syncJobRepository,
     required SyncLogger logger,
-  })  : _archiveLocator = archiveLocator,
-        _driveService = driveService,
-        _csvParser = csvParser,
-        _normalizer = normalizer,
-        _diffEngine = diffEngine,
-        _diffApplier = diffApplier,
-        _classificationOrchestrator = classificationOrchestrator,
-        _syncJobRepository = syncJobRepository,
-        _logger = logger;
+  }) : _archiveLocator = archiveLocator,
+       _driveService = driveService,
+       _csvParser = csvParser,
+       _geoJsonParser = geoJsonParser,
+       _normalizer = normalizer,
+       _diffEngine = diffEngine,
+       _diffApplier = diffApplier,
+       _classificationOrchestrator = classificationOrchestrator,
+       _syncJobRepository = syncJobRepository,
+       _logger = logger;
 
   @override
-  Future<SyncSummary> runSync(
-      [SyncPipelineOptions options = const SyncPipelineOptions()]) async {
+  Future<SyncSummary> runSync([
+    SyncPipelineOptions options = const SyncPipelineOptions(),
+  ]) async {
     final jobId = _uuid.v4();
     final logger = _logger.withJobId(jobId);
     final syncTimer = logger.startTimer('sync_total_duration');
@@ -115,16 +121,73 @@ class WebSyncOrchestrator implements SyncPipeline {
     await _syncJobRepository.start(job);
 
     try {
-      // Step 1: Find latest archive
-      final archiveGroup = await _archiveLocator.findLatestArchiveGroup();
-      if (archiveGroup == null) {
+      // Step 1: Find candidate archives (latest first)
+      final archiveGroups = await _archiveLocator.findArchiveGroupsSorted();
+      if (archiveGroups.isEmpty) {
         throw const AppError(
           AppErrorCode.archiveNotFound,
           'No Takeout archives found on Drive',
         );
       }
 
-      // Step 2: Skip if already processed
+      // Step 2: Find the latest archive group that contains parseable CSV candidates.
+      ArchiveGroup? archiveGroup;
+      var csvCandidates = <InMemoryCsvCandidate>[];
+      var checkedGroupCount = 0;
+      var oversizedGroupCount = 0;
+      var lastDiagnosticFiles = <String>[];
+
+      for (final candidateGroup in archiveGroups) {
+        checkedGroupCount++;
+
+        if (candidateGroup.totalSizeBytes > _maxTotalArchiveSize) {
+          oversizedGroupCount++;
+          logger.warn('archive_skipped_too_large', {
+            'archiveName': candidateGroup.displayName,
+            'sizeBytes': candidateGroup.totalSizeBytes,
+            'maxBytes': _maxTotalArchiveSize,
+          });
+          continue;
+        }
+
+        final discovery = await _discoverCsvCandidates(candidateGroup, logger);
+        lastDiagnosticFiles = discovery.allFileNames;
+
+        if (discovery.csvCandidates.isNotEmpty) {
+          archiveGroup = candidateGroup;
+          csvCandidates = discovery.csvCandidates;
+          logger.info('archive_with_csv_selected', {
+            'archiveName': archiveGroup.displayName,
+            'archiveIdentifier': archiveGroup.identifier,
+            'csvCandidateCount': csvCandidates.length,
+          });
+          break;
+        }
+
+        logger.warn('archive_skipped_no_relevant_csv', {
+          'archiveName': candidateGroup.displayName,
+          'allFileCount': discovery.allFileNames.length,
+        });
+      }
+
+      if (archiveGroup == null) {
+        if (oversizedGroupCount == archiveGroups.length) {
+          throw AppError(
+            AppErrorCode.downloadFailed,
+            'Drive上のTakeoutアーカイブがすべてサイズ上限超過です。\n'
+            '上限: $_maxTotalArchiveSize bytes\n'
+            '対象件数: ${archiveGroups.length}',
+          );
+        }
+        throw AppError(
+          AppErrorCode.csvNotFound,
+          '確認したTakeoutアーカイブ($checkedGroupCount件)内に対象CSVが見つかりません。\n'
+          '最後に確認したZIP内の全ファイル(${lastDiagnosticFiles.length}件): '
+          '${lastDiagnosticFiles.isEmpty ? "なし" : lastDiagnosticFiles.join(", ")}',
+        );
+      }
+
+      // Step 3: Skip if already processed
       if (!options.forceSync) {
         final latestJob = await _syncJobRepository.latest();
         if (latestJob != null &&
@@ -133,105 +196,16 @@ class WebSyncOrchestrator implements SyncPipeline {
           logger.info('sync_skipped_already_processed', {
             'archiveIdentifier': archiveGroup.identifier,
           });
-          await _syncJobRepository.complete(jobId,
-              status: SyncJobStatus.success);
+          await _syncJobRepository.complete(
+            jobId,
+            status: SyncJobStatus.success,
+          );
           syncTimer();
           return SyncSummary(
             status: 'success',
             archiveName: archiveGroup.displayName,
           );
         }
-      }
-
-      // Step 2.5: Size guard - reject archives that are too large for browser
-      if (archiveGroup.totalSizeBytes > _maxTotalArchiveSize) {
-        throw AppError(
-          AppErrorCode.downloadFailed,
-          'Archive too large for web processing: '
-              '${archiveGroup.totalSizeBytes} bytes exceeds '
-              '$_maxTotalArchiveSize byte limit',
-        );
-      }
-
-      // Step 3: Download + decode + extract CSVs only
-      // Process each ZIP file individually to minimize peak memory usage.
-      // Only CSV entries are kept; all other entries are discarded immediately.
-      final downloadTimer = logger.startTimer('archive_download_completed');
-      final csvCandidates = <InMemoryCsvCandidate>[];
-
-      for (final file in archiveGroup.files) {
-        logger.info('archive_download_started', {
-          'fileName': file.name,
-          'sizeBytes': file.sizeBytes,
-        });
-
-        final zipBytes = await _driveService.downloadFile(file.fileId);
-
-        // Decode ZIP and extract only CSV entries
-        final Archive archive;
-        try {
-          archive = ZipDecoder().decodeBytes(zipBytes);
-        } catch (e) {
-          throw AppError(
-            AppErrorCode.zipExtractFailed,
-            'Failed to decode ZIP: ${file.name}',
-            e,
-          );
-        }
-
-        for (final entry in archive) {
-          if (!entry.isFile) continue;
-          final name = entry.name.toLowerCase();
-          if (!name.endsWith('.csv')) continue;
-
-          final entryBytes = Uint8List.fromList(entry.content as List<int>);
-          final score = _scoreCandidate(entry.name, entryBytes);
-
-          if (score >= 3) {
-            csvCandidates.add(InMemoryCsvCandidate(
-              fileName: entry.name,
-              bytes: entryBytes,
-              score: score,
-            ));
-          }
-        }
-        // zipBytes and archive go out of scope here → eligible for GC
-      }
-
-      downloadTimer({
-        'archiveName': archiveGroup.displayName,
-        'fileCount': archiveGroup.files.length,
-        'csvCandidateCount': csvCandidates.length,
-      });
-
-      // Sort by score descending
-      csvCandidates.sort((a, b) => b.score.compareTo(a.score));
-
-      _logger.info('web_csv_discovery_completed', {
-        'candidateCount': csvCandidates.length,
-      });
-
-      if (csvCandidates.isEmpty) {
-        // Collect diagnostic info: list ALL files found in the ZIP
-        final allFileNames = <String>[];
-        for (final file in archiveGroup.files) {
-          try {
-            final zipBytes = await _driveService.downloadFile(file.fileId);
-            final diag = ZipDecoder().decodeBytes(zipBytes);
-            for (final e in diag) {
-              if (e.isFile) {
-                allFileNames.add(e.name);
-              }
-            }
-          } catch (_) {}
-        }
-
-        throw AppError(
-          AppErrorCode.csvNotFound,
-          'アーカイブ内に対象CSVが見つかりません。\n'
-          'ZIP内の全ファイル(${allFileNames.length}件): '
-          '${allFileNames.isEmpty ? "なし" : allFileNames.join(", ")}',
-        );
       }
 
       // Step 4: Parse + Normalize
@@ -242,19 +216,52 @@ class WebSyncOrchestrator implements SyncPipeline {
 
       for (final candidate in csvCandidates) {
         try {
-          final parseResult =
-              _csvParser.parse(candidate.bytes, fileName: candidate.fileName);
-          totalSkippedRows += parseResult.skippedRowCount;
+          final isJson = candidate.fileName.toLowerCase().endsWith('.json') ||
+              candidate.fileName.toLowerCase().endsWith('.geojson');
 
-          for (final raw in parseResult.records) {
-            allNormalized.add(_normalizer.normalize(raw));
+          if (isJson) {
+            // Parse as GeoJSON
+            final parseResult = _geoJsonParser.parse(
+              candidate.bytes,
+              fileName: candidate.fileName,
+            );
+            totalSkippedRows += parseResult.skippedCount;
+
+            // Derive collection name from filename
+            final collectionName = candidate.fileName
+                .split('/')
+                .last
+                .replaceAll(RegExp(r'\.(geo)?json$', caseSensitive: false), '');
+
+            for (final record in parseResult.records) {
+              allNormalized.add(record.copyWith(
+                collectionName: record.collectionName ?? collectionName,
+              ));
+            }
+
+            logger.info('geojson_parse_completed', {
+              'fileName': candidate.fileName,
+              'recordCount': parseResult.records.length,
+              'skippedCount': parseResult.skippedCount,
+            });
+          } else {
+            // Parse as CSV
+            final parseResult = _csvParser.parse(
+              candidate.bytes,
+              fileName: candidate.fileName,
+            );
+            totalSkippedRows += parseResult.skippedRowCount;
+
+            for (final raw in parseResult.records) {
+              allNormalized.add(_normalizer.normalize(raw));
+            }
+
+            logger.info('csv_parse_completed', {
+              'fileName': candidate.fileName,
+              'recordCount': parseResult.records.length,
+              'skippedRows': parseResult.skippedRowCount,
+            });
           }
-
-          logger.info('csv_parse_completed', {
-            'fileName': candidate.fileName,
-            'recordCount': parseResult.records.length,
-            'skippedRows': parseResult.skippedRowCount,
-          });
         } catch (e) {
           if (e is AppError &&
               (e.code == AppErrorCode.authRequired ||
@@ -265,18 +272,17 @@ class WebSyncOrchestrator implements SyncPipeline {
           failedCsvCount++;
 
           if (csvCandidates.length > 1) {
-            logger.warn('csv_parse_partial_failure', {
+            logger.warn('parse_partial_failure', {
               'fileName': candidate.fileName,
               'error': e.toString(),
-              'remainingCandidates':
-                  csvCandidates.length - failedCsvCount,
+              'remainingCandidates': csvCandidates.length - failedCsvCount,
             });
             continue;
           }
 
           throw AppError(
             AppErrorCode.csvParseFailed,
-            'CSV parse failed: ${candidate.fileName}',
+            'Parse failed: ${candidate.fileName}',
             e,
           );
         }
@@ -307,10 +313,7 @@ class WebSyncOrchestrator implements SyncPipeline {
 
       // Step 7: Classify
       final classifyTimer = logger.startTimer('classification_completed');
-      final placeIdsToClassify = [
-        ...newPlaceIds,
-        ...diff.updatedPlaceIds,
-      ];
+      final placeIdsToClassify = [...newPlaceIds, ...diff.updatedPlaceIds];
 
       var classificationFailed = false;
       try {
@@ -404,6 +407,94 @@ class WebSyncOrchestrator implements SyncPipeline {
     return score;
   }
 
+  Future<_ArchiveCsvDiscoveryResult> _discoverCsvCandidates(
+    ArchiveGroup archiveGroup,
+    SyncLogger logger,
+  ) async {
+    final csvCandidates = <InMemoryCsvCandidate>[];
+    final allFileNames = <String>[];
+    final downloadTimer = logger.startTimer('archive_download_completed');
+
+    // Process each ZIP file individually to minimize peak memory usage.
+    // Only CSV entries are kept; all other entries are discarded immediately.
+    for (final file in archiveGroup.files) {
+      logger.info('archive_download_started', {
+        'archiveName': archiveGroup.displayName,
+        'fileName': file.name,
+        'sizeBytes': file.sizeBytes,
+      });
+
+      final zipBytes = await _driveService.downloadFile(file.fileId);
+
+      final Archive archive;
+      try {
+        archive = ZipDecoder().decodeBytes(zipBytes);
+      } catch (e) {
+        throw AppError(
+          AppErrorCode.zipExtractFailed,
+          'Failed to decode ZIP: ${file.name}',
+          e,
+        );
+      }
+
+      for (final entry in archive) {
+        if (!entry.isFile) continue;
+        allFileNames.add(entry.name);
+
+        final name = entry.name.toLowerCase();
+        final isCsv = name.endsWith('.csv');
+        final isJson = name.endsWith('.json') || name.endsWith('.geojson');
+
+        // Skip archive_browser.html and other non-data files
+        if (!isCsv && !isJson) continue;
+
+        final entryBytes = Uint8List.fromList(entry.content as List<int>);
+
+        if (isCsv) {
+          final score = _scoreCandidate(entry.name, entryBytes);
+          if (score >= 3) {
+            csvCandidates.add(
+              InMemoryCsvCandidate(
+                fileName: entry.name,
+                bytes: entryBytes,
+                score: score,
+              ),
+            );
+          }
+        } else if (isJson) {
+          // JSON/GeoJSON files from Takeout are always relevant
+          // Score by filename patterns
+          final jsonFileName = name.split('/').last;
+          var score = 3; // Base score for JSON (always consider)
+          for (final pattern in _fileNamePatterns) {
+            if (jsonFileName.contains(pattern)) score += 2;
+          }
+          csvCandidates.add(
+            InMemoryCsvCandidate(
+              fileName: entry.name,
+              bytes: entryBytes,
+              score: score,
+            ),
+          );
+        }
+      }
+    }
+
+    // Sort by score descending
+    csvCandidates.sort((a, b) => b.score.compareTo(a.score));
+    downloadTimer({
+      'archiveName': archiveGroup.displayName,
+      'fileCount': archiveGroup.files.length,
+      'allFileCount': allFileNames.length,
+      'csvCandidateCount': csvCandidates.length,
+    });
+
+    return _ArchiveCsvDiscoveryResult(
+      csvCandidates: csvCandidates,
+      allFileNames: allFileNames,
+    );
+  }
+
   Future<SyncSummary> _runRebuildOnly(SyncLogger logger) async {
     logger.info('rebuild_only_started');
     try {
@@ -415,4 +506,14 @@ class WebSyncOrchestrator implements SyncPipeline {
       return const SyncSummary(status: 'failed');
     }
   }
+}
+
+class _ArchiveCsvDiscoveryResult {
+  final List<InMemoryCsvCandidate> csvCandidates;
+  final List<String> allFileNames;
+
+  const _ArchiveCsvDiscoveryResult({
+    required this.csvCandidates,
+    required this.allFileNames,
+  });
 }
