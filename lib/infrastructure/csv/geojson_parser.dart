@@ -16,23 +16,12 @@ class GeoJsonParseResult {
 
 /// Parses Google Takeout GeoJSON files into NormalizedPlaceRecords.
 ///
-/// Google Takeout exports saved places as GeoJSON FeatureCollection:
-/// ```json
-/// {
-///   "type": "FeatureCollection",
-///   "features": [{
-///     "type": "Feature",
-///     "geometry": { "coordinates": [lng, lat], "type": "Point" },
-///     "properties": {
-///       "Title": "Place Name",
-///       "Google Maps URL": "https://maps.google.com/...",
-///       "Location": { "Address": "..." },
-///       "Published": "2024-01-01T00:00:00Z",
-///       "Updated": "2024-01-01T00:00:00Z"
-///     }
-///   }]
-/// }
-/// ```
+/// Handles multiple Google Takeout format variations:
+/// - Standard: properties.Title
+/// - Alternative: properties.name
+/// - Nested: properties.Location."Business Name"
+/// - Case-insensitive fallback
+/// - Dynamic property scanning as last resort
 class GeoJsonParser {
   final SyncLogger _logger;
 
@@ -68,21 +57,27 @@ class GeoJsonParser {
     // Handle FeatureCollection
     final features = json['features'] as List<dynamic>? ?? [];
 
-    // Log property keys of first feature for diagnostics
+    // Log FULL first feature for diagnostics
     if (features.isNotEmpty) {
       try {
         final firstFeature = features[0] as Map<String, dynamic>;
         final firstProps =
             firstFeature['properties'] as Map<String, dynamic>? ?? {};
-        _logger.info('geojson_first_feature_keys', {
+        _logger.info('geojson_first_feature_debug', {
           'fileName': fileName,
+          'featureKeys': firstFeature.keys.toList(),
           'propertyKeys': firstProps.keys.toList(),
+          'propertyValues': firstProps.map(
+            (k, v) => MapEntry(
+              k,
+              v is String
+                  ? (v.length > 80 ? '${v.substring(0, 80)}...' : v)
+                  : v is Map
+                      ? '{${(v as Map).keys.join(", ")}}'
+                      : v.toString(),
+            ),
+          ),
           'hasGeometry': firstFeature.containsKey('geometry'),
-          'locationKeys': firstProps['Location'] is Map
-              ? (firstProps['Location'] as Map).keys.toList()
-              : firstProps['場所'] is Map
-                  ? (firstProps['場所'] as Map).keys.toList()
-                  : <String>[],
         });
       } catch (_) {
         // Diagnostic only — ignore errors
@@ -92,7 +87,7 @@ class GeoJsonParser {
     for (var i = 0; i < features.length; i++) {
       try {
         final feature = features[i] as Map<String, dynamic>;
-        final record = _parseFeature(feature);
+        final record = _parseFeature(feature, logIndex: i);
         if (record != null) {
           records.add(record);
         } else {
@@ -118,43 +113,61 @@ class GeoJsonParser {
     return GeoJsonParseResult(records: records, skippedCount: skippedCount);
   }
 
-  NormalizedPlaceRecord? _parseFeature(Map<String, dynamic> feature) {
+  NormalizedPlaceRecord? _parseFeature(
+    Map<String, dynamic> feature, {
+    int logIndex = -1,
+  }) {
     final props = feature['properties'] as Map<String, dynamic>? ?? {};
     final geometry = feature['geometry'] as Map<String, dynamic>?;
 
-    // Extract title (try multiple field names at top level)
+    // ── Step 1: Extract title ──
+
+    // 1a. Try exact key matches at top level
     var title = _findString(props, [
-      'Title', 'title', 'Name', 'name',
-      'タイトル', '名前',
+      'Title', 'title', 'Name', 'name', 'label', 'Label',
+      'タイトル', '名前', 'ラベル',
     ]);
 
-    // Extract Google Maps URL
+    // 1b. Try nested Location/場所 object
+    if (title == null) {
+      final location = _findMap(props, [
+        'Location', 'location', '場所', 'Place', 'place',
+      ]);
+      if (location != null) {
+        title = _findString(location, [
+          'Business Name', 'business_name', 'Name', 'name',
+          'ビジネス名', '名前', '店名', 'Label', 'label',
+        ]);
+      }
+    }
+
+    // 1c. Case-insensitive key scan
+    if (title == null) {
+      title = _findStringCaseInsensitive(props, [
+        'title', 'name', 'label', 'place_name', 'placename',
+      ]);
+    }
+
+    // 1d. Last resort: find any suitable string property
+    if (title == null) {
+      title = _findFirstSuitableTitle(props);
+    }
+
+    // ── Step 2: Extract Maps URL ──
+
     var mapsUrl = _findString(props, [
       'Google Maps URL', 'google_maps_url', 'URL', 'url',
-      'Google マップの URL',
+      'Google マップの URL', 'maps_url', 'link', 'Link',
     ]);
 
-    // Extract Location object (English or Japanese key)
-    final location = (props['Location'] ?? props['場所'])
-        as Map<String, dynamic>?;
-
-    // If no title at top level, try nested Location.Business Name
-    if (title == null && location != null) {
-      title = _findString(location, [
-        'Business Name', 'business_name', 'Name', 'name',
-        'ビジネス名', '名前', '店名',
+    // Case-insensitive URL search
+    if (mapsUrl == null) {
+      mapsUrl = _findStringCaseInsensitive(props, [
+        'google maps url', 'url', 'link', 'maps_url',
       ]);
     }
 
-    // Extract address from Location object
-    String? address;
-    if (location != null) {
-      address = _findString(location, [
-        'Address', 'address', '住所',
-      ]);
-    }
-
-    // If no Maps URL found, construct from geometry coordinates
+    // Construct URL from geometry coordinates
     if (mapsUrl == null && geometry != null) {
       final coords = geometry['coordinates'] as List<dynamic>?;
       if (coords != null && coords.length >= 2) {
@@ -169,7 +182,35 @@ class GeoJsonParser {
     // Skip entries with no title and no URL
     if (title == null && mapsUrl == null) return null;
 
-    // Extract note/comment
+    // Log what we found for the first few features
+    if (logIndex < 3) {
+      _logger.info('geojson_feature_parsed', {
+        'index': logIndex,
+        'title': title,
+        'mapsUrl': mapsUrl != null
+            ? (mapsUrl.length > 60
+                ? '${mapsUrl.substring(0, 60)}...'
+                : mapsUrl)
+            : null,
+        'propKeys': props.keys.toList(),
+      });
+    }
+
+    // ── Step 3: Extract other fields ──
+
+    // Location object for address
+    final location = _findMap(props, [
+      'Location', 'location', '場所', 'Place', 'place',
+    ]);
+
+    String? address;
+    if (location != null) {
+      address = _findString(location, [
+        'Address', 'address', '住所',
+      ]);
+    }
+
+    // Note/comment
     final note = _findString(props, [
       'Note', 'note', 'Notes', 'notes',
       'メモ', 'ノート',
@@ -190,7 +231,7 @@ class GeoJsonParser {
     );
   }
 
-  /// Find a string value in a map by trying multiple keys.
+  /// Find a string value by trying exact key matches.
   String? _findString(Map<String, dynamic> map, List<String> keys) {
     for (final key in keys) {
       final value = map[key];
@@ -199,6 +240,75 @@ class GeoJsonParser {
       }
     }
     return null;
+  }
+
+  /// Find a nested Map by trying multiple keys.
+  Map<String, dynamic>? _findMap(
+      Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      final value = map[key];
+      if (value is Map<String, dynamic>) {
+        return value;
+      }
+    }
+    // Case-insensitive fallback
+    for (final entry in map.entries) {
+      final lowerKey = entry.key.toLowerCase();
+      for (final key in keys) {
+        if (lowerKey == key.toLowerCase() && entry.value is Map) {
+          return Map<String, dynamic>.from(entry.value as Map);
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Case-insensitive key search for string values.
+  String? _findStringCaseInsensitive(
+      Map<String, dynamic> map, List<String> targetKeys) {
+    for (final entry in map.entries) {
+      final lowerKey = entry.key.toLowerCase().replaceAll(' ', '_');
+      for (final target in targetKeys) {
+        if (lowerKey == target.toLowerCase().replaceAll(' ', '_')) {
+          final value = entry.value;
+          if (value is String && value.trim().isNotEmpty) {
+            return value.trim();
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Find the first string property that looks like a place name.
+  /// Excludes URLs, dates, and very long strings.
+  String? _findFirstSuitableTitle(Map<String, dynamic> props) {
+    // Skip these keys — they are known non-title fields
+    const skipKeys = {
+      'published', 'updated', 'created', 'date', 'type',
+      'google maps url', 'url', 'link',
+      'status', 'category',
+    };
+
+    for (final entry in props.entries) {
+      if (skipKeys.contains(entry.key.toLowerCase())) continue;
+
+      final value = entry.value;
+      if (value is String &&
+          value.trim().isNotEmpty &&
+          value.trim().length > 1 &&
+          value.trim().length < 200 &&
+          !value.trim().startsWith('http') &&
+          !_looksLikeDate(value.trim())) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  /// Check if a string looks like an ISO date.
+  bool _looksLikeDate(String value) {
+    return RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(value);
   }
 
   /// Decode bytes handling BOM and UTF-8.

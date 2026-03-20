@@ -139,10 +139,16 @@ class _PlaceList extends StatelessWidget {
         itemBuilder: (context, index) {
           final item = places[index];
           final place = item.place;
+          // Show raw data keys for diagnosis when title is missing
+          final rawDebug = place.sourceTitle == null &&
+                  place.rawPayloadJson != null
+              ? 'RAW: ${place.rawPayloadJson!.length > 150 ? place.rawPayloadJson!.substring(0, 150) : place.rawPayloadJson}'
+              : null;
           final subtitle = [
             if (place.collectionName != null && place.collectionName!.isNotEmpty)
               place.collectionName!,
             if (place.note != null && place.note!.isNotEmpty) place.note!,
+            if (rawDebug != null) rawDebug,
           ].join('\n');
 
           return ListTile(
