@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../domain/models/group.dart';
+import '../../domain/models/place.dart';
 import '../models/place_with_groups.dart';
 import '../providers/places_providers.dart';
 import '../theme/app_colors.dart';
@@ -110,13 +111,13 @@ class PlacesScreen extends ConsumerWidget {
   }
 }
 
-class _PlaceList extends StatelessWidget {
+class _PlaceList extends ConsumerWidget {
   final List<PlaceWithGroups> places;
 
   const _PlaceList({required this.places});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (places.isEmpty) {
       return const Card(
         child: Center(
@@ -148,9 +149,19 @@ class _PlaceList extends StatelessWidget {
           return ListTile(
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            title: Text(
-              place.sourceTitle ?? '(タイトルなし)',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    place.sourceTitle ?? '(タイトルなし)',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                _EditButton(
+                  place: place,
+                  onSaved: () => ref.invalidate(filteredPlacesProvider),
+                ),
+              ],
             ),
             subtitle: subtitle.isNotEmpty
                 ? Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis)
@@ -175,6 +186,70 @@ class _PlaceList extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+class _EditButton extends ConsumerWidget {
+  final Place place;
+  final VoidCallback onSaved;
+
+  const _EditButton({required this.place, required this.onSaved});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      icon: const Icon(Icons.edit_outlined, size: 18),
+      color: AppColors.textSecondary,
+      tooltip: '名前を編集',
+      onPressed: () => _showEditDialog(context, ref),
+    );
+  }
+
+  Future<void> _showEditDialog(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController(text: place.sourceTitle ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('場所の名前を編集'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '場所の名前を入力',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return; // cancelled
+
+    try {
+      await ref.read(placeUpdateProvider.notifier).updateTitle(place, result);
+      onSaved();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('名前を更新しました')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('更新に失敗しました: $e')),
+        );
+      }
+    }
   }
 }
 

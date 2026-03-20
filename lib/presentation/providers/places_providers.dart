@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/group.dart';
+import '../../domain/models/place.dart';
 import '../models/place_with_groups.dart';
 import 'core_providers.dart';
 
@@ -81,3 +82,24 @@ final filteredPlacesProvider = FutureProvider<List<PlaceWithGroups>>((ref) async
 
   return results;
 });
+
+// Update a place's title
+final placeUpdateProvider =
+    NotifierProvider<PlaceUpdateNotifier, AsyncValue<void>>(
+  PlaceUpdateNotifier.new,
+);
+
+class PlaceUpdateNotifier extends Notifier<AsyncValue<void>> {
+  @override
+  AsyncValue<void> build() => const AsyncData(null);
+
+  Future<void> updateTitle(Place place, String newTitle) async {
+    final repo = ref.read(placeRepositoryProvider);
+    final updated = place.copyWith(
+      sourceTitle: newTitle.trim().isEmpty ? null : newTitle.trim(),
+      updatedAt: DateTime.now(),
+    );
+    await repo.update(updated);
+    ref.invalidate(filteredPlacesProvider);
+  }
+}
