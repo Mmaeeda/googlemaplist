@@ -116,37 +116,41 @@ class ApiKeyNotifier extends Notifier<String?> {
   void set(String? key) => state = key?.trim().isEmpty == true ? null : key?.trim();
 }
 
-// Photo fetch progress
-class PhotoFetchProgress {
+// Photo fetch state
+class PhotoFetchState {
   final int current;
   final int total;
-  final int resolved;
   final bool isRunning;
+  final PhotoResolveResult? result;
 
-  const PhotoFetchProgress({
+  const PhotoFetchState({
     this.current = 0,
     this.total = 0,
-    this.resolved = 0,
     this.isRunning = false,
+    this.result,
   });
 }
 
 final photoFetchProvider =
-    NotifierProvider<PhotoFetchNotifier, PhotoFetchProgress>(
+    NotifierProvider<PhotoFetchNotifier, PhotoFetchState>(
   PhotoFetchNotifier.new,
 );
 
-class PhotoFetchNotifier extends Notifier<PhotoFetchProgress> {
+class PhotoFetchNotifier extends Notifier<PhotoFetchState> {
   @override
-  PhotoFetchProgress build() => const PhotoFetchProgress();
+  PhotoFetchState build() => const PhotoFetchState();
 
-  Future<void> fetchPhotos() async {
-    if (state.isRunning) return;
+  Future<PhotoResolveResult> fetchPhotos() async {
+    if (state.isRunning) {
+      return const PhotoResolveResult();
+    }
 
     final apiKey = ref.read(apiKeyProvider);
-    if (apiKey == null || apiKey.isEmpty) return;
+    if (apiKey == null || apiKey.isEmpty) {
+      return const PhotoResolveResult(firstError: 'APIキーが未設定です');
+    }
 
-    state = const PhotoFetchProgress(isRunning: true);
+    state = const PhotoFetchState(isRunning: true);
 
     final service = PlacesPhotoService(
       placeRepository: ref.read(placeRepositoryProvider),
@@ -154,23 +158,24 @@ class PhotoFetchNotifier extends Notifier<PhotoFetchProgress> {
     );
 
     try {
-      final count = await service.resolvePhotos(
+      final result = await service.resolvePhotos(
         apiKey: apiKey,
         onProgress: (current, total) {
-          state = PhotoFetchProgress(
+          state = PhotoFetchState(
             current: current,
             total: total,
-            resolved: state.resolved,
             isRunning: true,
           );
         },
       );
 
-      state = PhotoFetchProgress(resolved: count);
+      state = PhotoFetchState(result: result);
       ref.invalidate(filteredPlacesProvider);
+      return result;
     } catch (e) {
-      state = const PhotoFetchProgress();
-      rethrow;
+      final result = PhotoResolveResult(firstError: e.toString());
+      state = PhotoFetchState(result: result);
+      return result;
     } finally {
       service.dispose();
     }

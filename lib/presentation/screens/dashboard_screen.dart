@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/sync_job.dart';
 import '../../domain/models/sync_summary.dart';
+import '../../infrastructure/places_api/places_photo_service.dart';
 import '../providers/core_providers.dart';
 import '../providers/dashboard_providers.dart';
 import '../providers/places_providers.dart';
@@ -375,21 +376,103 @@ class _PhotoFetchButton extends ConsumerWidget {
       ref.read(apiKeyProvider.notifier).set(key);
     }
 
-    try {
-      await ref.read(photoFetchProvider.notifier).fetchPhotos();
-      final resolved = ref.read(photoFetchProvider).resolved;
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$resolved件の写真を取得しました')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('写真取得エラー: $e')),
-        );
-      }
+    final result = await ref.read(photoFetchProvider.notifier).fetchPhotos();
+    if (context.mounted) {
+      _showResultDialog(context, result);
     }
+  }
+
+  void _showResultDialog(BuildContext context, PhotoResolveResult result) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          result.resolved > 0 ? '写真取得完了' : '写真取得結果',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _resultRow('対象件数', '${result.total}件'),
+            _resultRow('取得成功', '${result.resolved}件',
+                color: result.resolved > 0 ? AppColors.primary : null),
+            if (result.noCoordinates > 0)
+              _resultRow('座標なし（スキップ）', '${result.noCoordinates}件',
+                  color: AppColors.googleYellow),
+            if (result.noPlaceFound > 0)
+              _resultRow('付近に場所なし', '${result.noPlaceFound}件'),
+            if (result.noPhotoFound > 0)
+              _resultRow('写真なし', '${result.noPhotoFound}件'),
+            if (result.saveFailed > 0)
+              _resultRow('DB保存失敗', '${result.saveFailed}件',
+                  color: AppColors.googleRed),
+            if (result.apiFailed > 0)
+              _resultRow('API呼び出し失敗', '${result.apiFailed}件',
+                  color: AppColors.googleRed),
+            if (result.firstError != null) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text('エラー詳細:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 4),
+              SelectableText(
+                result.firstError!,
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.googleRed),
+              ),
+            ],
+            if (result.noCoordinates == result.total &&
+                result.total > 0) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'すべての場所に座標がありません。\n'
+                '「今すぐ同期」を実行してデータを更新してから再度お試しください。',
+                style: TextStyle(fontSize: 13, color: AppColors.googleYellow),
+              ),
+            ],
+            if (result.saveFailed > 0 && result.resolved == 0) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'DB保存に失敗しています。\n'
+                'Supabase SQL Editorで以下を実行してください:\n\n'
+                'ALTER TABLE places ADD COLUMN\n'
+                '  IF NOT EXISTS photo_url TEXT;',
+                style: TextStyle(fontSize: 13, color: AppColors.googleRed),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _resultRow(String label, String value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 14)),
+          Text(value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: color,
+              )),
+        ],
+      ),
+    );
   }
 
   Future<String?> _showApiKeyDialog(
@@ -407,7 +490,7 @@ class _PhotoFetchButton extends ConsumerWidget {
           children: [
             const Text(
               '場所の写真を取得するには、Google Cloud Console で '
-              'Places API (New) を有効化し、APIキーを入力してください。',
+              'Places API を有効化し、APIキーを入力してください。',
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),

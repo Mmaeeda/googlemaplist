@@ -6,12 +6,33 @@ import '../../domain/models/place.dart';
 import '../../domain/repositories/place_repository.dart';
 import '../logging/sync_logger.dart';
 
-/// Resolves place photos via Google Places API (New).
+/// Diagnostic result from photo resolution.
+class PhotoResolveResult {
+  final int total;
+  final int resolved;
+  final int noCoordinates;
+  final int noPlaceFound;
+  final int noPhotoFound;
+  final int saveFailed;
+  final int apiFailed;
+  final String? firstError;
+
+  const PhotoResolveResult({
+    this.total = 0,
+    this.resolved = 0,
+    this.noCoordinates = 0,
+    this.noPlaceFound = 0,
+    this.noPhotoFound = 0,
+    this.saveFailed = 0,
+    this.apiFailed = 0,
+    this.firstError,
+  });
+}
+
+/// Resolves place photos via Google Places API.
 ///
-/// Flow per place:
-/// 1. Nearby Search by coordinates → get first photo reference
-/// 2. Photo media endpoint with skipHttpRedirect → get CDN photoUri
-/// 3. Store photoUri in place record
+/// Uses the Nearby Search API to find a place by coordinates,
+/// then constructs a photo URL from the photo_reference.
 class PlacesPhotoService {
   final PlaceRepository _placeRepository;
   final SyncLogger _logger;
@@ -26,8 +47,7 @@ class PlacesPhotoService {
         _httpClient = httpClient ?? http.Client();
 
   /// Resolve photos for all places that don't have one yet.
-  /// Returns the number of successfully resolved photos.
-  Future<int> resolvePhotos({
+  Future<PhotoResolveResult> resolvePhotos({
     required String apiKey,
     void Function(int current, int total)? onProgress,
   }) async {
@@ -37,14 +57,24 @@ class PlacesPhotoService {
         .toList();
 
     if (withoutPhoto.isEmpty) {
-      _logger.info('photo_resolve_skipped', {'reason': 'all places have photos'});
-      return 0;
+      _logger.info('photo_resolve_skipped', {
+        'reason': 'all places have photos',
+      });
+      return PhotoResolveResult(total: allPlaces.length);
     }
 
-    _logger.info('photo_resolve_started', {'count': withoutPhoto.length});
-    var resolvedCount = 0;
-    var failedCount = 0;
-    var noCoordCount = 0;
+    _logger.info('photo_resolve_started', {
+      'totalPlaces': allPlaces.length,
+      'withoutPhoto': withoutPhoto.length,
+    });
+
+    var resolved = 0;
+    var noCoordinates = 0;
+    var noPlaceFound = 0;
+    var noPhotoFound = 0;
+    var saveFailed = 0;
+    var apiFailed = 0;
+    String? firstError;
 
     for (var i = 0; i < withoutPhoto.length; i++) {
       final place = withoutPhoto[i];
@@ -53,7 +83,7 @@ class PlacesPhotoService {
       try {
         final coords = _extractCoordinates(place);
         if (coords == null) {
-          noCoordCount++;
+          noCoordinates++;
           continue;
         }
 
@@ -63,115 +93,128 @@ class PlacesPhotoService {
           apiKey: apiKey,
         );
 
-        if (photoUrl != null) {
+        if (photoUrl == null) {
+          noPlaceFound++;
+          continue;
+        }
+
+        if (photoUrl == 'no_photo') {
+          noPhotoFound++;
+          continue;
+        }
+
+        // Save to DB
+        try {
           final updated = place.copyWith(
             photoUrl: photoUrl,
             updatedAt: DateTime.now(),
           );
           await _placeRepository.update(updated);
-          resolvedCount++;
-
-          if (resolvedCount <= 5) {
-            _logger.info('photo_resolved', {
-              'placeId': place.id,
-              'title': place.sourceTitle,
-            });
-          }
-        }
-
-        // Rate limit: ~5 requests/second (2 API calls per place)
-        await Future.delayed(const Duration(milliseconds: 400));
-      } catch (e) {
-        failedCount++;
-        if (failedCount <= 5) {
-          _logger.warn('photo_resolve_failed', {
+          resolved++;
+        } catch (e) {
+          saveFailed++;
+          firstError ??= 'DB保存エラー: $e';
+          _logger.warn('photo_save_failed', {
             'placeId': place.id,
             'error': e.toString(),
           });
         }
-        // If we get auth errors, stop early
-        if (e.toString().contains('403') || e.toString().contains('401')) {
-          _logger.error('photo_resolve_auth_error', {
-            'error': 'API key may be invalid or Places API not enabled',
-          });
+
+        // Rate limit: ~3 requests/second
+        await Future.delayed(const Duration(milliseconds: 350));
+      } catch (e) {
+        apiFailed++;
+        firstError ??= e.toString();
+        _logger.warn('photo_resolve_failed', {
+          'placeId': place.id,
+          'error': e.toString(),
+        });
+        // Stop early on auth errors
+        if (e.toString().contains('403') ||
+            e.toString().contains('401') ||
+            e.toString().contains('REQUEST_DENIED')) {
+          firstError = 'APIキーが無効、またはPlaces APIが未有効化です';
           break;
         }
       }
     }
 
+    final result = PhotoResolveResult(
+      total: withoutPhoto.length,
+      resolved: resolved,
+      noCoordinates: noCoordinates,
+      noPlaceFound: noPlaceFound,
+      noPhotoFound: noPhotoFound,
+      saveFailed: saveFailed,
+      apiFailed: apiFailed,
+      firstError: firstError,
+    );
+
     _logger.info('photo_resolve_completed', {
-      'total': withoutPhoto.length,
-      'resolved': resolvedCount,
-      'failed': failedCount,
-      'noCoordinates': noCoordCount,
+      'total': result.total,
+      'resolved': result.resolved,
+      'noCoordinates': result.noCoordinates,
+      'noPlaceFound': result.noPlaceFound,
+      'noPhotoFound': result.noPhotoFound,
+      'saveFailed': result.saveFailed,
+      'apiFailed': result.apiFailed,
+      'firstError': result.firstError,
     });
 
-    return resolvedCount;
+    return result;
   }
 
   /// Resolve a photo URL for a single place using coordinates.
+  /// Returns photo URL, 'no_photo' if place found but no photos, or null if no place.
   Future<String?> _resolvePhotoForPlace({
     required double lat,
     required double lng,
     required String apiKey,
   }) async {
-    // Step 1: Nearby Search to find the place and get photo reference
+    // Use Places API Nearby Search (GET, simpler CORS)
     final searchUri = Uri.parse(
-      'https://places.googleapis.com/v1/places:searchNearby',
+      'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+      '?location=$lat,$lng'
+      '&radius=50'
+      '&key=$apiKey',
     );
 
-    final searchResponse = await _httpClient.post(
-      searchUri,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.photos',
-      },
-      body: jsonEncode({
-        'maxResultCount': 1,
-        'locationRestriction': {
-          'circle': {
-            'center': {'latitude': lat, 'longitude': lng},
-            'radiusMeters': 50,
-          },
-        },
-      }),
-    );
+    final searchResponse = await _httpClient.get(searchUri);
 
     if (searchResponse.statusCode != 200) {
       throw Exception(
-        'Nearby Search failed: ${searchResponse.statusCode} ${searchResponse.body}',
+        'Nearby Search HTTP ${searchResponse.statusCode}: '
+        '${searchResponse.body.length > 200 ? searchResponse.body.substring(0, 200) : searchResponse.body}',
       );
     }
 
     final searchData =
         jsonDecode(searchResponse.body) as Map<String, dynamic>;
-    final places = searchData['places'] as List<dynamic>?;
-    if (places == null || places.isEmpty) return null;
 
-    final firstPlace = places[0] as Map<String, dynamic>;
-    final photos = firstPlace['photos'] as List<dynamic>?;
-    if (photos == null || photos.isEmpty) return null;
+    // Check API-level error
+    final status = searchData['status'] as String?;
+    if (status == 'REQUEST_DENIED') {
+      throw Exception(
+        'REQUEST_DENIED: ${searchData['error_message'] ?? 'Unknown'}',
+      );
+    }
+    if (status != 'OK' && status != 'ZERO_RESULTS') {
+      throw Exception('API status: $status');
+    }
 
-    final photoName = photos[0]['name'] as String?;
-    if (photoName == null) return null;
+    final results = searchData['results'] as List<dynamic>?;
+    if (results == null || results.isEmpty) return null;
 
-    // Step 2: Get the photo CDN URL
-    final photoUri = Uri.parse(
-      'https://places.googleapis.com/v1/$photoName/media'
-      '?maxHeightPx=200&maxWidthPx=200&skipHttpRedirect=true',
-    );
+    final firstResult = results[0] as Map<String, dynamic>;
+    final photos = firstResult['photos'] as List<dynamic>?;
+    if (photos == null || photos.isEmpty) return 'no_photo';
 
-    final photoResponse = await _httpClient.get(
-      photoUri,
-      headers: {'X-Goog-Api-Key': apiKey},
-    );
+    final photoRef = photos[0]['photo_reference'] as String?;
+    if (photoRef == null) return 'no_photo';
 
-    if (photoResponse.statusCode != 200) return null;
-
-    final photoData =
-        jsonDecode(photoResponse.body) as Map<String, dynamic>;
-    return photoData['photoUri'] as String?;
+    // Construct photo URL directly (this URL works as an image src)
+    return 'https://maps.googleapis.com/maps/api/place/photo'
+        '?maxwidth=200&photo_reference=$photoRef&key=$apiKey';
   }
 
   /// Extract (lat, lng) from rawPayloadJson or mapsUrl.
