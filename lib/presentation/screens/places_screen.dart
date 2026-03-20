@@ -148,7 +148,7 @@ class _PlaceList extends StatelessWidget {
             if (place.collectionName != null && place.collectionName!.isNotEmpty)
               place.collectionName!,
             if (place.note != null && place.note!.isNotEmpty) place.note!,
-            if (rawDebug != null) rawDebug,
+            ?rawDebug,
           ].join('\n');
 
           return ListTile(

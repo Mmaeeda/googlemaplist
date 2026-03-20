@@ -73,7 +73,7 @@ class GeoJsonParser {
               v is String
                   ? (v.length > 80 ? '${v.substring(0, 80)}...' : v)
                   : v is Map
-                      ? '{${(v as Map).keys.join(", ")}}'
+                      ? '{${v.keys.join(", ")}}'
                       : v.toString(),
             ),
           ),
@@ -142,16 +142,12 @@ class GeoJsonParser {
     }
 
     // 1c. Case-insensitive key scan
-    if (title == null) {
-      title = _findStringCaseInsensitive(props, [
-        'title', 'name', 'label', 'place_name', 'placename',
-      ]);
-    }
+    title ??= _findStringCaseInsensitive(props, [
+      'title', 'name', 'label', 'place_name', 'placename',
+    ]);
 
     // 1d. Last resort: find any suitable string property
-    if (title == null) {
-      title = _findFirstSuitableTitle(props);
-    }
+    title ??= _findFirstSuitableTitle(props);
 
     // ── Step 2: Extract Maps URL ──
 
@@ -161,11 +157,9 @@ class GeoJsonParser {
     ]);
 
     // Case-insensitive URL search
-    if (mapsUrl == null) {
-      mapsUrl = _findStringCaseInsensitive(props, [
-        'google maps url', 'url', 'link', 'maps_url',
-      ]);
-    }
+    mapsUrl ??= _findStringCaseInsensitive(props, [
+      'google maps url', 'url', 'link', 'maps_url',
+    ]);
 
     // Construct URL from geometry coordinates
     if (mapsUrl == null && geometry != null) {
