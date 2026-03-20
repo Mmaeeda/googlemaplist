@@ -216,12 +216,16 @@ class GeoJsonParser {
       'コメント', '説明',
     ]);
 
+    // Include geometry in rawPayloadJson for later coordinate-based resolution
+    final rawPayload = <String, dynamic>{'properties': props};
+    if (geometry != null) rawPayload['geometry'] = geometry;
+
     return NormalizedPlaceRecord(
       sourceTitle: title,
       mapsUrl: mapsUrl,
       note: note ?? address,
       comments: comment,
-      rawPayloadJson: jsonEncode(props),
+      rawPayloadJson: jsonEncode(rawPayload),
     );
   }
 

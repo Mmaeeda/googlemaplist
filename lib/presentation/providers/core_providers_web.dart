@@ -12,6 +12,7 @@ import '../../infrastructure/classification/classification_engine.dart';
 import '../../infrastructure/csv/csv_parser.dart';
 import '../../infrastructure/csv/geojson_parser.dart';
 import '../../infrastructure/csv/place_normalizer.dart';
+import '../../infrastructure/geocoding/place_name_resolver.dart';
 import '../../infrastructure/database/app_database.dart';
 import '../../infrastructure/drive/google_drive_service.dart';
 import '../../infrastructure/drive/takeout_archive_locator.dart';
@@ -114,6 +115,16 @@ final classificationOrchestratorProvider =
           ref.watch(syncLoggerProvider),
         ));
 
+// Place Name Resolver (Nominatim reverse geocoding)
+final placeNameResolverProvider = Provider<PlaceNameResolver>((ref) {
+  final resolver = PlaceNameResolver(
+    placeRepository: ref.watch(placeRepositoryProvider),
+    logger: ref.watch(syncLoggerProvider),
+  );
+  ref.onDispose(() => resolver.dispose());
+  return resolver;
+});
+
 // Web Sync Orchestrator
 final webSyncOrchestratorProvider = Provider<WebSyncOrchestrator>((ref) =>
     WebSyncOrchestrator(
@@ -125,6 +136,7 @@ final webSyncOrchestratorProvider = Provider<WebSyncOrchestrator>((ref) =>
       diffEngine: ref.watch(diffEngineProvider),
       diffApplier: ref.watch(diffApplierProvider),
       classificationOrchestrator: ref.watch(classificationOrchestratorProvider),
+      placeNameResolver: ref.watch(placeNameResolverProvider),
       syncJobRepository: ref.watch(syncJobRepositoryProvider),
       logger: ref.watch(syncLoggerProvider),
     ));

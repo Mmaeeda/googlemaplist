@@ -94,7 +94,12 @@ class DiffEngine {
   List<String> _detectChanges(Place existing, NormalizedPlaceRecord incoming) {
     final changes = <String>[];
 
-    if (_changed(existing.sourceTitle, incoming.sourceTitle)) {
+    // Only flag source_title as changed when incoming has a non-empty value.
+    // This prevents resolved titles (via reverse geocoding) from being
+    // overwritten with null on subsequent syncs.
+    if (incoming.sourceTitle != null &&
+        incoming.sourceTitle!.trim().isNotEmpty &&
+        _changed(existing.sourceTitle, incoming.sourceTitle)) {
       changes.add('source_title');
     }
     if (_changed(existing.mapsUrl, incoming.mapsUrl)) {

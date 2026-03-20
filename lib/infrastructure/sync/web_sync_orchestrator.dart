@@ -16,6 +16,7 @@ import '../csv/geojson_parser.dart';
 import '../csv/place_normalizer.dart';
 import '../drive/google_drive_service.dart';
 import '../drive/takeout_archive_locator.dart';
+import '../geocoding/place_name_resolver.dart';
 import '../logging/sync_logger.dart';
 import 'diff_applier.dart';
 import 'diff_engine.dart';
@@ -39,6 +40,7 @@ class WebSyncOrchestrator implements SyncPipeline {
   final DiffEngine _diffEngine;
   final DiffApplier _diffApplier;
   final ClassificationOrchestrator _classificationOrchestrator;
+  final PlaceNameResolver _placeNameResolver;
   final SyncJobRepository _syncJobRepository;
   final SyncLogger _logger;
 
@@ -77,6 +79,7 @@ class WebSyncOrchestrator implements SyncPipeline {
     required DiffEngine diffEngine,
     required DiffApplier diffApplier,
     required ClassificationOrchestrator classificationOrchestrator,
+    required PlaceNameResolver placeNameResolver,
     required SyncJobRepository syncJobRepository,
     required SyncLogger logger,
   }) : _archiveLocator = archiveLocator,
@@ -87,6 +90,7 @@ class WebSyncOrchestrator implements SyncPipeline {
        _diffEngine = diffEngine,
        _diffApplier = diffApplier,
        _classificationOrchestrator = classificationOrchestrator,
+       _placeNameResolver = placeNameResolver,
        _syncJobRepository = syncJobRepository,
        _logger = logger;
 
@@ -329,7 +333,17 @@ class WebSyncOrchestrator implements SyncPipeline {
       }
       classifyTimer({'placeCount': placeIdsToClassify.length});
 
-      // Step 8: Complete job
+      // Step 8: Resolve place names via reverse geocoding
+      final resolveTimer = logger.startTimer('name_resolution_completed');
+      var resolvedNameCount = 0;
+      try {
+        resolvedNameCount = await _placeNameResolver.resolveAll();
+      } catch (e) {
+        logger.warn('name_resolution_failed', {'error': e.toString()});
+      }
+      resolveTimer({'resolvedCount': resolvedNameCount});
+
+      // Step 9: Complete job
       final status = classificationFailed
           ? SyncJobStatus.partial
           : SyncJobStatus.success;
