@@ -4,6 +4,7 @@ import '../../domain/models/sync_job.dart';
 import '../../domain/models/sync_summary.dart';
 import '../providers/core_providers.dart';
 import '../providers/dashboard_providers.dart';
+import '../providers/places_providers.dart';
 import '../theme/app_colors.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -73,6 +74,8 @@ class DashboardScreen extends ConsumerWidget {
                             ? const Text('')
                             : Text(isSyncing ? '同期中...' : '今すぐ同期'),
                       ),
+                      const SizedBox(width: 8),
+                      _PhotoFetchButton(isMobile: isMobile),
                       const SizedBox(width: 8),
                       IconButton(
                         onPressed: () => ref.read(authStateProvider.notifier).signOut(),
@@ -328,6 +331,111 @@ class _ActivityItem {
     required this.subtitle,
     required this.time,
   });
+}
+
+class _PhotoFetchButton extends ConsumerWidget {
+  final bool isMobile;
+
+  const _PhotoFetchButton({required this.isMobile});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final photoFetch = ref.watch(photoFetchProvider);
+    final apiKey = ref.watch(apiKeyProvider);
+    final isFetching = photoFetch.isRunning;
+
+    return ElevatedButton.icon(
+      onPressed: isFetching
+          ? null
+          : () => _handlePhotoFetch(context, ref, apiKey),
+      icon: isFetching
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.photo_camera),
+      label: isMobile
+          ? const Text('')
+          : Text(isFetching
+              ? '${photoFetch.current}/${photoFetch.total}'
+              : '写真取得'),
+    );
+  }
+
+  Future<void> _handlePhotoFetch(
+    BuildContext context,
+    WidgetRef ref,
+    String? currentKey,
+  ) async {
+    // Show API key dialog if not set
+    if (currentKey == null || currentKey.isEmpty) {
+      final key = await _showApiKeyDialog(context, currentKey);
+      if (key == null || key.isEmpty) return;
+      ref.read(apiKeyProvider.notifier).set(key);
+    }
+
+    try {
+      await ref.read(photoFetchProvider.notifier).fetchPhotos();
+      final resolved = ref.read(photoFetchProvider).resolved;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$resolved件の写真を取得しました')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('写真取得エラー: $e')),
+        );
+      }
+    }
+  }
+
+  Future<String?> _showApiKeyDialog(
+    BuildContext context,
+    String? currentKey,
+  ) async {
+    final controller = TextEditingController(text: currentKey ?? '');
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Google Places API キー'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '場所の写真を取得するには、Google Cloud Console で '
+              'Places API (New) を有効化し、APIキーを入力してください。',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'AIza...',
+                border: OutlineInputBorder(),
+                labelText: 'API キー',
+              ),
+              onSubmitted: (value) => Navigator.of(context).pop(value),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('保存して取得開始'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StatCard extends StatelessWidget {

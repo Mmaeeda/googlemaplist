@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/group.dart';
 import '../../domain/models/place.dart';
+import '../../infrastructure/places_api/places_photo_service.dart';
 import '../models/place_with_groups.dart';
 import 'core_providers.dart';
 
@@ -101,5 +102,77 @@ class PlaceUpdateNotifier extends Notifier<AsyncValue<void>> {
     );
     await repo.update(updated);
     ref.invalidate(filteredPlacesProvider);
+  }
+}
+
+// Google Places API key (in-memory per session)
+final apiKeyProvider =
+    NotifierProvider<ApiKeyNotifier, String?>(ApiKeyNotifier.new);
+
+class ApiKeyNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? key) => state = key?.trim().isEmpty == true ? null : key?.trim();
+}
+
+// Photo fetch progress
+class PhotoFetchProgress {
+  final int current;
+  final int total;
+  final int resolved;
+  final bool isRunning;
+
+  const PhotoFetchProgress({
+    this.current = 0,
+    this.total = 0,
+    this.resolved = 0,
+    this.isRunning = false,
+  });
+}
+
+final photoFetchProvider =
+    NotifierProvider<PhotoFetchNotifier, PhotoFetchProgress>(
+  PhotoFetchNotifier.new,
+);
+
+class PhotoFetchNotifier extends Notifier<PhotoFetchProgress> {
+  @override
+  PhotoFetchProgress build() => const PhotoFetchProgress();
+
+  Future<void> fetchPhotos() async {
+    if (state.isRunning) return;
+
+    final apiKey = ref.read(apiKeyProvider);
+    if (apiKey == null || apiKey.isEmpty) return;
+
+    state = const PhotoFetchProgress(isRunning: true);
+
+    final service = PlacesPhotoService(
+      placeRepository: ref.read(placeRepositoryProvider),
+      logger: ref.read(syncLoggerProvider),
+    );
+
+    try {
+      final count = await service.resolvePhotos(
+        apiKey: apiKey,
+        onProgress: (current, total) {
+          state = PhotoFetchProgress(
+            current: current,
+            total: total,
+            resolved: state.resolved,
+            isRunning: true,
+          );
+        },
+      );
+
+      state = PhotoFetchProgress(resolved: count);
+      ref.invalidate(filteredPlacesProvider);
+    } catch (e) {
+      state = const PhotoFetchProgress();
+      rethrow;
+    } finally {
+      service.dispose();
+    }
   }
 }

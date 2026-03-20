@@ -5,7 +5,7 @@ import 'seed_data.dart';
 
 class AppDatabase {
   static const _databaseName = 'maps_saved.db';
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 2;
 
   Database? _database;
 
@@ -25,6 +25,7 @@ class AppDatabase {
       path,
       version: _databaseVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -40,6 +41,7 @@ class AppDatabase {
         collection_name TEXT,
         collection_description TEXT,
         raw_payload_json TEXT,
+        photo_url TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         last_seen_at TEXT NOT NULL,
@@ -125,6 +127,12 @@ class AppDatabase {
 
     // Seed initial groups and rules
     await SeedData.seed(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE places ADD COLUMN photo_url TEXT');
+    }
   }
 
   Future<void> close() async {

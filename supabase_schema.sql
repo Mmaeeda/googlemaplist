@@ -98,6 +98,11 @@ CREATE TABLE classification_rules (
 CREATE INDEX idx_classification_rules_user_id ON classification_rules(user_id);
 
 -- ============================================================
+-- Migration: Add photo_url column
+-- ============================================================
+ALTER TABLE places ADD COLUMN IF NOT EXISTS photo_url TEXT;
+
+-- ============================================================
 -- RLS Policies
 -- ============================================================
 

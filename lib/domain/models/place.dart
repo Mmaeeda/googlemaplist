@@ -8,6 +8,7 @@ class Place {
   final String? collectionName;
   final String? collectionDescription;
   final String? rawPayloadJson;
+  final String? photoUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime lastSeenAt;
@@ -26,6 +27,7 @@ class Place {
     this.collectionName,
     this.collectionDescription,
     this.rawPayloadJson,
+    this.photoUrl,
     required this.createdAt,
     required this.updatedAt,
     required this.lastSeenAt,
@@ -45,6 +47,7 @@ class Place {
     String? collectionName,
     String? collectionDescription,
     String? rawPayloadJson,
+    String? photoUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? lastSeenAt,
@@ -63,6 +66,7 @@ class Place {
       collectionName: collectionName ?? this.collectionName,
       collectionDescription: collectionDescription ?? this.collectionDescription,
       rawPayloadJson: rawPayloadJson ?? this.rawPayloadJson,
+      photoUrl: photoUrl ?? this.photoUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastSeenAt: lastSeenAt ?? this.lastSeenAt,
@@ -84,6 +88,7 @@ class Place {
       'collection_name': collectionName,
       'collection_description': collectionDescription,
       'raw_payload_json': rawPayloadJson,
+      'photo_url': photoUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'last_seen_at': lastSeenAt.toIso8601String(),
@@ -105,6 +110,7 @@ class Place {
       collectionName: map['collection_name'] as String?,
       collectionDescription: map['collection_description'] as String?,
       rawPayloadJson: map['raw_payload_json'] as String?,
+      photoUrl: map['photo_url'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
       lastSeenAt: DateTime.parse(map['last_seen_at'] as String),

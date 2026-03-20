@@ -149,6 +149,7 @@ class _PlaceList extends ConsumerWidget {
           return ListTile(
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            leading: _PlacePhoto(photoUrl: place.photoUrl),
             title: Row(
               children: [
                 Expanded(
@@ -264,6 +265,29 @@ class _GroupChip extends StatelessWidget {
       label: Text(group.name, style: const TextStyle(fontSize: 12)),
       backgroundColor: AppColors.background,
       side: const BorderSide(color: AppColors.border),
+    );
+  }
+}
+
+class _PlacePhoto extends StatelessWidget {
+  final String? photoUrl;
+
+  const _PlacePhoto({required this.photoUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: 22,
+        backgroundImage: NetworkImage(photoUrl!),
+        backgroundColor: AppColors.surface,
+        onBackgroundImageError: (_, _) {},
+      );
+    }
+    return const CircleAvatar(
+      radius: 22,
+      backgroundColor: AppColors.surface,
+      child: Icon(Icons.place, color: AppColors.textSecondary, size: 20),
     );
   }
 }
