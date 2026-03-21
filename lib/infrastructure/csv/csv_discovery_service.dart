@@ -46,9 +46,10 @@ class CsvDiscoveryService {
   // Filename patterns that boost score
   static const _fileNamePatterns = [
     // English
-    'saved', 'maps', 'places', 'locations',
+    'saved', 'maps', 'places', 'locations', 'favorite', 'want to go',
     // Japanese
-    '保存', 'マップ', '場所', 'マイプレイス', 'お気に入り', '行きたい', 'スター',
+    '保存', 'マップ', '場所', 'マイプレイス', 'お気に入り',
+    '行きたい', '行ってみたい', 'スター',
   ];
 
   CsvDiscoveryService(this._logger);

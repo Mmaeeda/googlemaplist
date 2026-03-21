@@ -65,9 +65,10 @@ class WebSyncOrchestrator implements SyncPipeline {
 
   static const _fileNamePatterns = [
     // English
-    'saved', 'maps', 'places', 'locations',
+    'saved', 'maps', 'places', 'locations', 'favorite', 'want to go',
     // Japanese
-    '保存', 'マップ', '場所', 'マイプレイス', 'お気に入り', '行きたい', 'スター',
+    '保存', 'マップ', '場所', 'マイプレイス', 'お気に入り',
+    '行きたい', '行ってみたい', 'スター',
   ];
 
   WebSyncOrchestrator({
@@ -261,14 +262,27 @@ class WebSyncOrchestrator implements SyncPipeline {
             );
             totalSkippedRows += parseResult.skippedRowCount;
 
+            // Derive collection name from filename for CSVs without
+            // a collection_name column (e.g. Saved section per-list CSVs)
+            final csvCollectionName = candidate.fileName
+                .split('/')
+                .last
+                .replaceAll(RegExp(r'\.csv$', caseSensitive: false), '');
+
             for (final raw in parseResult.records) {
-              allNormalized.add(_normalizer.normalize(raw));
+              final normalized = _normalizer.normalize(raw);
+              allNormalized.add(
+                normalized.collectionName != null
+                    ? normalized
+                    : normalized.copyWith(collectionName: csvCollectionName),
+              );
             }
 
             logger.info('csv_parse_completed', {
               'fileName': candidate.fileName,
               'recordCount': parseResult.records.length,
               'skippedRows': parseResult.skippedRowCount,
+              'derivedCollectionName': csvCollectionName,
             });
           }
         } catch (e) {
