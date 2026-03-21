@@ -55,6 +55,23 @@ class SupabasePlaceRepository implements PlaceRepository {
   }
 
   @override
+  Future<void> updateTitle(String placeId, String? newTitle) async {
+    final userId = _userId;
+    final result = await _client
+        .from(_table)
+        .update({
+          'source_title': newTitle,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', placeId)
+        .eq('user_id', userId)
+        .select();
+    if (result.isEmpty) {
+      throw Exception('更新対象のレコードが見つかりません (placeId: $placeId)');
+    }
+  }
+
+  @override
   Future<void> markMissing(String placeId) async {
     final place = await findById(placeId);
     if (place == null) return;

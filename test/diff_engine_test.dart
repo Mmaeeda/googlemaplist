@@ -44,6 +44,13 @@ class InMemoryPlaceRepository implements PlaceRepository {
   }
 
   @override
+  Future<void> updateTitle(String placeId, String? newTitle) async {
+    final place = _places[placeId];
+    if (place == null) return;
+    _places[placeId] = place.copyWith(sourceTitle: newTitle ?? place.sourceTitle);
+  }
+
+  @override
   Future<void> markMissing(String placeId) async {
     final place = _places[placeId];
     if (place == null) return;

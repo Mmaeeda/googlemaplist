@@ -110,13 +110,17 @@ class PlaceUpdateNotifier extends Notifier<AsyncValue<void>> {
   AsyncValue<void> build() => const AsyncData(null);
 
   Future<void> updateTitle(Place place, String newTitle) async {
-    final repo = ref.read(placeRepositoryProvider);
-    final updated = place.copyWith(
-      sourceTitle: newTitle.trim().isEmpty ? null : newTitle.trim(),
-      updatedAt: DateTime.now(),
-    );
-    await repo.update(updated);
-    ref.invalidate(filteredPlacesProvider);
+    state = const AsyncLoading();
+    try {
+      final repo = ref.read(placeRepositoryProvider);
+      final trimmed = newTitle.trim();
+      await repo.updateTitle(place.id, trimmed.isEmpty ? null : trimmed);
+      ref.invalidate(filteredPlacesProvider);
+      state = const AsyncData(null);
+    } catch (e) {
+      state = AsyncError(e, StackTrace.current);
+      rethrow;
+    }
   }
 }
 

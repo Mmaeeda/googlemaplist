@@ -51,6 +51,20 @@ class SqlitePlaceRepository implements PlaceRepository {
   }
 
   @override
+  Future<void> updateTitle(String placeId, String? newTitle) async {
+    final db = await _db;
+    await db.update(
+      'places',
+      {
+        'source_title': newTitle,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [placeId],
+    );
+  }
+
+  @override
   Future<void> markMissing(String placeId) async {
     final db = await _db;
     final place = await _findById(db, placeId);
