@@ -161,6 +161,11 @@ class InMemoryPlaceGroupRepository implements PlaceGroupRepository {
   }
 
   @override
+  Future<List<PlaceGroup>> listAll() async {
+    return _placeGroups.values.expand((list) => list).toList();
+  }
+
+  @override
   Future<void> insertManualGroup(PlaceGroup placeGroup) async {
     _placeGroups
         .putIfAbsent(placeGroup.placeId, () => [])

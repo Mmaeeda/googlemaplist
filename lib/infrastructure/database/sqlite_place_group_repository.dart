@@ -43,6 +43,13 @@ class SqlitePlaceGroupRepository implements PlaceGroupRepository {
   }
 
   @override
+  Future<List<PlaceGroup>> listAll() async {
+    final db = await _db;
+    final results = await db.query('place_groups');
+    return results.map(PlaceGroup.fromMap).toList();
+  }
+
+  @override
   Future<void> insertManualGroup(PlaceGroup placeGroup) async {
     final db = await _db;
     await db.insert(

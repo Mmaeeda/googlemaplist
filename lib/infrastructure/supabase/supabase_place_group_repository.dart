@@ -38,6 +38,15 @@ class SupabasePlaceGroupRepository implements PlaceGroupRepository {
   }
 
   @override
+  Future<List<PlaceGroup>> listAll() async {
+    final results = await _client
+        .from(_table)
+        .select()
+        .eq('user_id', _userId);
+    return results.map(SupabaseHelpers.placeGroupFromRow).toList();
+  }
+
+  @override
   Future<void> insertManualGroup(PlaceGroup placeGroup) async {
     await _client
         .from(_table)

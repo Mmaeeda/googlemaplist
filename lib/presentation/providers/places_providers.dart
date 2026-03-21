@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/group.dart';
 import '../../domain/models/place.dart';
+import '../../domain/models/place_group.dart';
 import '../../infrastructure/places_api/places_photo_service.dart';
 import '../models/place_with_groups.dart';
 import 'core_providers.dart';
@@ -38,7 +39,7 @@ class SearchQueryNotifier extends Notifier<String> {
   void update(String query) => state = query;
 }
 
-// Filtered place list
+// Filtered place list (batch-fetched to avoid N+1 queries)
 final filteredPlacesProvider = FutureProvider<List<PlaceWithGroups>>((ref) async {
   final placeRepo = ref.watch(placeRepositoryProvider);
   final placeGroupRepo = ref.watch(placeGroupRepositoryProvider);
@@ -46,14 +47,28 @@ final filteredPlacesProvider = FutureProvider<List<PlaceWithGroups>>((ref) async
   final selectedGroupId = ref.watch(selectedGroupProvider);
   final searchQuery = ref.watch(searchQueryProvider).toLowerCase();
 
-  final places = await placeRepo.listAllActive();
-  final allGroups = await groupRepo.listAll();
+  // Batch fetch all data in parallel (3 queries instead of N+2)
+  final futures = await Future.wait([
+    placeRepo.listAllActive(),
+    groupRepo.listAll(),
+    placeGroupRepo.listAll(),
+  ]);
+  final places = futures[0] as List<Place>;
+  final allGroups = futures[1] as List<Group>;
+  final allPlaceGroups = futures[2] as List<PlaceGroup>;
+
   final groupMap = {for (final g in allGroups) g.id: g};
+
+  // Build place-id → place-groups lookup map
+  final placeGroupMap = <String, List<PlaceGroup>>{};
+  for (final pg in allPlaceGroups) {
+    (placeGroupMap[pg.placeId] ??= []).add(pg);
+  }
 
   final results = <PlaceWithGroups>[];
 
   for (final place in places) {
-    final placeGroups = await placeGroupRepo.listByPlaceId(place.id);
+    final placeGroups = placeGroupMap[place.id] ?? [];
     final groups = placeGroups
         .map((pg) => groupMap[pg.groupId])
         .whereType<Group>()

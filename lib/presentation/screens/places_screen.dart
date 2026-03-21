@@ -86,7 +86,7 @@ class PlacesScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Expanded(
                   child: filteredPlaces.when(
-                    data: (places) => _PlaceList(places: places),
+                    data: (places) => _PlaceList(places: places, isMobile: true),
                     loading: () => const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Center(
                       child: Text('エラー: $e',
@@ -123,7 +123,7 @@ class PlacesScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               Expanded(
                 child: filteredPlaces.when(
-                  data: (places) => _PlaceList(places: places),
+                  data: (places) => _PlaceList(places: places, isMobile: false),
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(
                     child: Text('エラー: $e',
@@ -142,8 +142,13 @@ class PlacesScreen extends ConsumerWidget {
 class _PlaceList extends ConsumerWidget {
   final List<PlaceWithGroups> places;
   final bool shrinkWrap;
+  final bool isMobile;
 
-  const _PlaceList({required this.places, this.shrinkWrap = false});
+  const _PlaceList({
+    required this.places,
+    this.shrinkWrap = false,
+    this.isMobile = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -171,6 +176,11 @@ class _PlaceList extends ConsumerWidget {
         itemBuilder: (context, index) {
           final item = places[index];
           final place = item.place;
+
+          if (isMobile) {
+            return _MobilePlaceItem(item: item, ref: ref);
+          }
+
           final subtitle = [
             if (place.collectionName != null && place.collectionName!.isNotEmpty)
               place.collectionName!,
@@ -216,6 +226,95 @@ class _PlaceList extends ConsumerWidget {
                 : null,
           );
         },
+      ),
+    );
+  }
+}
+
+class _MobilePlaceItem extends StatelessWidget {
+  final PlaceWithGroups item;
+  final WidgetRef ref;
+
+  const _MobilePlaceItem({required this.item, required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final place = item.place;
+    final subtitle = [
+      if (place.collectionName != null && place.collectionName!.isNotEmpty)
+        place.collectionName!,
+      if (place.note != null && place.note!.isNotEmpty) place.note!,
+    ].join(' / ');
+
+    return InkWell(
+      onTap: place.mapsUrl != null
+          ? () => launchUrl(
+                Uri.parse(place.mapsUrl!),
+                mode: LaunchMode.externalApplication,
+              )
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _PlacePhoto(photoUrl: place.photoUrl),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          place.sourceTitle ?? '(タイトルなし)',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      _EditButton(
+                        place: place,
+                        onSaved: () => ref.invalidate(filteredPlacesProvider),
+                      ),
+                      if (place.mapsUrl != null)
+                        const Icon(Icons.open_in_new,
+                            size: 14, color: AppColors.textSecondary),
+                    ],
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  if (item.groups.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: item.groups
+                            .map((group) => _GroupChipCompact(group: group))
+                            .toList(),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -296,6 +395,28 @@ class _GroupChip extends StatelessWidget {
       label: Text(group.name, style: const TextStyle(fontSize: 12)),
       backgroundColor: AppColors.background,
       side: const BorderSide(color: AppColors.border),
+    );
+  }
+}
+
+class _GroupChipCompact extends StatelessWidget {
+  final Group group;
+
+  const _GroupChipCompact({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        group.name,
+        style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+      ),
     );
   }
 }
