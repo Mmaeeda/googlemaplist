@@ -20,12 +20,45 @@ class PlacesScreen extends ConsumerWidget {
       builder: (context, constraints) {
         final bool isMobile = constraints.maxWidth < 600;
 
-        return Padding(
-          padding: EdgeInsets.all(isMobile ? 16.0 : 32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        final searchField = TextField(
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search),
+            hintText: '場所を検索...',
+          ),
+          onChanged: (value) =>
+              ref.read(searchQueryProvider.notifier).update(value),
+        );
+
+        final filterChips = groups.when(
+          data: (groupList) => Wrap(
+            spacing: 8,
             children: [
-              if (isMobile) ...[
+              _FilterChip(
+                label: 'すべて',
+                isSelected: selectedGroupId == null,
+                onSelected: () =>
+                    ref.read(selectedGroupProvider.notifier).select(null),
+              ),
+              ...groupList.map((group) => _FilterChip(
+                    label: group.name,
+                    isSelected: selectedGroupId == group.id,
+                    onSelected: () =>
+                        ref.read(selectedGroupProvider.notifier).select(
+                            group.id),
+                  )),
+            ],
+          ),
+          loading: () => const SizedBox.shrink(),
+          error: (e, st) => const SizedBox.shrink(),
+        );
+
+        // Mobile: scrollable layout
+        if (isMobile) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
                   '場所リスト',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -35,64 +68,51 @@ class PlacesScreen extends ConsumerWidget {
                       ),
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: '場所を検索...',
+                searchField,
+                const SizedBox(height: 16),
+                filterChips,
+                const SizedBox(height: 24),
+                filteredPlaces.when(
+                  data: (places) => _PlaceList(places: places, shrinkWrap: true),
+                  loading: () => const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
                   ),
-                  onChanged: (value) =>
-                      ref.read(searchQueryProvider.notifier).update(value),
-                ),
-              ] else
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '場所リスト',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
+                  error: (e, _) => SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Text('エラー: $e',
+                          style: const TextStyle(color: AppColors.googleRed)),
                     ),
-                    SizedBox(
-                      width: 280,
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          hintText: '場所を検索...',
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Desktop: fixed layout
+        return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '場所リスト',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
                         ),
-                        onChanged: (value) =>
-                            ref.read(searchQueryProvider.notifier).update(value),
-                      ),
-                    ),
-                  ],
-                ),
-              SizedBox(height: isMobile ? 16 : 32),
-              // Filter Chips
-              groups.when(
-                data: (groupList) => Wrap(
-                  spacing: 8,
-                  children: [
-                    _FilterChip(
-                      label: 'すべて',
-                      isSelected: selectedGroupId == null,
-                      onSelected: () =>
-                          ref.read(selectedGroupProvider.notifier).select(null),
-                    ),
-                    ...groupList.map((group) => _FilterChip(
-                          label: group.name,
-                          isSelected: selectedGroupId == group.id,
-                          onSelected: () =>
-                              ref.read(selectedGroupProvider.notifier).select(
-                                  group.id),
-                        )),
-                  ],
-                ),
-                loading: () => const SizedBox.shrink(),
-                error: (e, st) => const SizedBox.shrink(),
+                  ),
+                  SizedBox(width: 280, child: searchField),
+                ],
               ),
+              const SizedBox(height: 32),
+              filterChips,
               const SizedBox(height: 24),
-              // List
               Expanded(
                 child: filteredPlaces.when(
                   data: (places) => _PlaceList(places: places),
@@ -113,8 +133,9 @@ class PlacesScreen extends ConsumerWidget {
 
 class _PlaceList extends ConsumerWidget {
   final List<PlaceWithGroups> places;
+  final bool shrinkWrap;
 
-  const _PlaceList({required this.places});
+  const _PlaceList({required this.places, this.shrinkWrap = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -135,6 +156,8 @@ class _PlaceList extends ConsumerWidget {
 
     return Card(
       child: ListView.separated(
+        shrinkWrap: shrinkWrap,
+        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
         itemCount: places.length,
         separatorBuilder: (context, index) => const Divider(),
         itemBuilder: (context, index) {

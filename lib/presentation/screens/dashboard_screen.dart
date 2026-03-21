@@ -42,137 +42,160 @@ class DashboardScreen extends ConsumerWidget {
       builder: (context, constraints) {
         final bool isMobile = constraints.maxWidth < 600;
 
+        final headerRow = Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'ダッシュボード',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                    fontSize: isMobile ? 24 : null,
+                  ),
+            ),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: isSyncing
+                      ? null
+                      : () => ref.read(syncActionProvider.notifier).runSync(),
+                  icon: isSyncing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.sync),
+                  label: isMobile
+                      ? const Text('')
+                      : Text(isSyncing ? '同期中...' : '今すぐ同期'),
+                ),
+                const SizedBox(width: 8),
+                _PhotoFetchButton(isMobile: isMobile),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () => ref.read(authStateProvider.notifier).signOut(),
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'ログアウト',
+                  style: IconButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+
+        Widget? errorBanner;
+        if (syncAction is AsyncError) {
+          errorBanner = Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.googleRed.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.googleRed.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.error_outline, color: AppColors.googleRed, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '同期エラー: ${(syncAction as AsyncError).error}',
+                    style: const TextStyle(color: AppColors.googleRed, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget? successBanner;
+        if (syncAction case AsyncData<SyncSummary?>(:final value?)) {
+          successBanner = Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: AppColors.primary, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '同期完了: 新規${value.newCount}件 / 更新${value.updatedCount}件 / 未変更${value.unchangedCount}件',
+                    style: TextStyle(color: AppColors.primary, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final activityTitle = Text(
+          '最近のアクティビティ',
+          style: Theme.of(context).textTheme.titleLarge,
+        );
+
+        final activitySection = _ActivitySection(
+          lastSync: lastSync,
+          syncAction: syncAction,
+        );
+
+        // Mobile: scrollable ListView
+        if (isMobile) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              headerRow,
+              const SizedBox(height: 16),
+              _StatCard(title: '登録済み件数', value: placeValue, icon: Icons.map, iconColor: AppColors.googleBlue),
+              const SizedBox(height: 16),
+              _StatCard(title: '有効なルール', value: ruleValue, icon: Icons.rule, iconColor: AppColors.googleYellow),
+              const SizedBox(height: 16),
+              _StatCard(title: '最終同期', value: lastSyncValue, icon: Icons.access_time, iconColor: AppColors.googleRed),
+              if (errorBanner != null)
+                Padding(padding: const EdgeInsets.only(top: 16), child: errorBanner),
+              if (successBanner != null)
+                Padding(padding: const EdgeInsets.only(top: 16), child: successBanner),
+              const SizedBox(height: 24),
+              activityTitle,
+              const SizedBox(height: 16),
+              activitySection,
+            ],
+          );
+        }
+
+        // Desktop: fixed layout with Expanded activity section
         return Padding(
-          padding: EdgeInsets.all(isMobile ? 16.0 : 32.0),
+          padding: const EdgeInsets.all(32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              headerRow,
+              const SizedBox(height: 32),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'ダッシュボード',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                          fontSize: isMobile ? 24 : null,
-                        ),
-                  ),
-                  Row(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: isSyncing
-                            ? null
-                            : () => ref.read(syncActionProvider.notifier).runSync(),
-                        icon: isSyncing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.sync),
-                        label: isMobile
-                            ? const Text('')
-                            : Text(isSyncing ? '同期中...' : '今すぐ同期'),
-                      ),
-                      const SizedBox(width: 8),
-                      _PhotoFetchButton(isMobile: isMobile),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: () => ref.read(authStateProvider.notifier).signOut(),
-                        icon: const Icon(Icons.logout),
-                        tooltip: 'ログアウト',
-                        style: IconButton.styleFrom(
-                          foregroundColor: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+                  Expanded(child: _StatCard(title: '登録済み件数', value: placeValue, icon: Icons.map, iconColor: AppColors.googleBlue)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _StatCard(title: '有効なルール', value: ruleValue, icon: Icons.rule, iconColor: AppColors.googleYellow)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _StatCard(title: '最終同期', value: lastSyncValue, icon: Icons.access_time, iconColor: AppColors.googleRed)),
                 ],
               ),
-              SizedBox(height: isMobile ? 16 : 32),
-              // Stats
-              isMobile
-                  ? Column(
-                      children: [
-                        _StatCard(title: '登録済み件数', value: placeValue, icon: Icons.map, iconColor: AppColors.googleBlue),
-                        const SizedBox(height: 16),
-                        _StatCard(title: '有効なルール', value: ruleValue, icon: Icons.rule, iconColor: AppColors.googleYellow),
-                        const SizedBox(height: 16),
-                        _StatCard(title: '最終同期', value: lastSyncValue, icon: Icons.access_time, iconColor: AppColors.googleRed),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(child: _StatCard(title: '登録済み件数', value: placeValue, icon: Icons.map, iconColor: AppColors.googleBlue)),
-                        const SizedBox(width: 24),
-                        Expanded(child: _StatCard(title: '有効なルール', value: ruleValue, icon: Icons.rule, iconColor: AppColors.googleYellow)),
-                        const SizedBox(width: 24),
-                        Expanded(child: _StatCard(title: '最終同期', value: lastSyncValue, icon: Icons.access_time, iconColor: AppColors.googleRed)),
-                      ],
-                    ),
-              // Sync error display
-              if (syncAction is AsyncError)
-                Padding(
-                  padding: EdgeInsets.only(bottom: isMobile ? 16 : 24),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.googleRed.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.googleRed.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.error_outline, color: AppColors.googleRed, size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '同期エラー: ${(syncAction as AsyncError).error}',
-                            style: const TextStyle(color: AppColors.googleRed, fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              // Sync success display
-              if (syncAction case AsyncData<SyncSummary?>(:final value?))
-                Padding(
-                  padding: EdgeInsets.only(bottom: isMobile ? 16 : 24),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle_outline, color: AppColors.primary, size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '同期完了: 新規${value.newCount}件 / 更新${value.updatedCount}件 / 未変更${value.unchangedCount}件',
-                            style: TextStyle(color: AppColors.primary, fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              SizedBox(height: isMobile ? 24 : 32),
-              Text(
-                '最近のアクティビティ',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              if (errorBanner != null)
+                Padding(padding: const EdgeInsets.only(bottom: 24), child: errorBanner),
+              if (successBanner != null)
+                Padding(padding: const EdgeInsets.only(bottom: 24), child: successBanner),
+              const SizedBox(height: 32),
+              activityTitle,
               const SizedBox(height: 16),
-              Expanded(
-                child: _ActivitySection(lastSync: lastSync, syncAction: syncAction),
-              ),
+              Expanded(child: activitySection),
             ],
           ),
         );
@@ -265,6 +288,8 @@ class _ActivitySection extends StatelessWidget {
     ];
 
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
@@ -369,7 +394,6 @@ class _PhotoFetchButton extends ConsumerWidget {
     WidgetRef ref,
     String? currentKey,
   ) async {
-    // Show API key dialog if not set
     if (currentKey == null || currentKey.isEmpty) {
       final key = await _showApiKeyDialog(context, currentKey);
       if (key == null || key.isEmpty) return;

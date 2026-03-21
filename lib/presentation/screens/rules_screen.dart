@@ -19,30 +19,65 @@ class RulesScreen extends ConsumerWidget {
       builder: (context, constraints) {
         final bool isMobile = constraints.maxWidth < 600;
 
+        final headerRow = Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'ルールとグループ',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                    fontSize: isMobile ? 24 : null,
+                  ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _showRuleDialog(context, ref, groups),
+              icon: const Icon(Icons.add),
+              label: isMobile ? const Text('') : const Text('ルールを追加'),
+            ),
+          ],
+        );
+
+        // Mobile: scrollable layout
+        if (isMobile) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                headerRow,
+                const SizedBox(height: 16),
+                rules.when(
+                  data: (ruleList) => _RuleList(
+                    rules: ruleList,
+                    groups: groups,
+                    shrinkWrap: true,
+                  ),
+                  loading: () => const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (e, _) => SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Text('エラー: $e',
+                          style: const TextStyle(color: AppColors.googleRed)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Desktop: fixed layout
         return Padding(
-          padding: EdgeInsets.all(isMobile ? 16.0 : 32.0),
+          padding: const EdgeInsets.all(32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'ルールとグループ',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                          fontSize: isMobile ? 24 : null,
-                        ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _showRuleDialog(context, ref, groups),
-                    icon: const Icon(Icons.add),
-                    label: isMobile ? const Text('') : const Text('ルールを追加'),
-                  ),
-                ],
-              ),
-              SizedBox(height: isMobile ? 16 : 32),
+              headerRow,
+              const SizedBox(height: 32),
               Expanded(
                 child: rules.when(
                   data: (ruleList) => _RuleList(
@@ -85,8 +120,9 @@ class RulesScreen extends ConsumerWidget {
 class _RuleList extends ConsumerWidget {
   final List<ClassificationRule> rules;
   final AsyncValue<List<Group>> groups;
+  final bool shrinkWrap;
 
-  const _RuleList({required this.rules, required this.groups});
+  const _RuleList({required this.rules, required this.groups, this.shrinkWrap = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -112,6 +148,8 @@ class _RuleList extends ConsumerWidget {
 
     return Card(
       child: ListView.separated(
+        shrinkWrap: shrinkWrap,
+        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
         itemCount: rules.length,
         separatorBuilder: (context, index) => const Divider(),
         itemBuilder: (context, index) {
