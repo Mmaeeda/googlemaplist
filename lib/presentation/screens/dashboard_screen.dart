@@ -147,27 +147,30 @@ class DashboardScreen extends ConsumerWidget {
           syncAction: syncAction,
         );
 
-        // Mobile: scrollable ListView
+        // Mobile: full-page scroll
         if (isMobile) {
-          return ListView(
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            children: [
-              headerRow,
-              const SizedBox(height: 16),
-              _StatCard(title: '登録済み件数', value: placeValue, icon: Icons.map, iconColor: AppColors.googleBlue),
-              const SizedBox(height: 16),
-              _StatCard(title: '有効なルール', value: ruleValue, icon: Icons.rule, iconColor: AppColors.googleYellow),
-              const SizedBox(height: 16),
-              _StatCard(title: '最終同期', value: lastSyncValue, icon: Icons.access_time, iconColor: AppColors.googleRed),
-              if (errorBanner != null)
-                Padding(padding: const EdgeInsets.only(top: 16), child: errorBanner),
-              if (successBanner != null)
-                Padding(padding: const EdgeInsets.only(top: 16), child: successBanner),
-              const SizedBox(height: 24),
-              activityTitle,
-              const SizedBox(height: 16),
-              activitySection,
-            ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                headerRow,
+                const SizedBox(height: 12),
+                _StatCard(title: '登録済み件数', value: placeValue, icon: Icons.map, iconColor: AppColors.googleBlue),
+                const SizedBox(height: 12),
+                _StatCard(title: '有効なルール', value: ruleValue, icon: Icons.rule, iconColor: AppColors.googleYellow),
+                const SizedBox(height: 12),
+                _StatCard(title: '最終同期', value: lastSyncValue, icon: Icons.access_time, iconColor: AppColors.googleRed),
+                if (errorBanner != null)
+                  Padding(padding: const EdgeInsets.only(top: 12), child: errorBanner),
+                if (successBanner != null)
+                  Padding(padding: const EdgeInsets.only(top: 12), child: successBanner),
+                const SizedBox(height: 20),
+                activityTitle,
+                const SizedBox(height: 12),
+                activitySection,
+              ],
+            ),
           );
         }
 
@@ -287,24 +290,19 @@ class _ActivitySection extends StatelessWidget {
         ),
     ];
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: AppColors.surface,
-            child: Icon(item.icon, color: item.iconColor),
-          ),
-          title: Text(item.title),
-          subtitle: item.subtitle.isNotEmpty ? Text(item.subtitle) : null,
-          trailing: item.time.isNotEmpty
-              ? Text(item.time, style: const TextStyle(color: AppColors.textSecondary))
-              : null,
-        );
-      },
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: items.map((item) => ListTile(
+        leading: CircleAvatar(
+          backgroundColor: AppColors.surface,
+          child: Icon(item.icon, color: item.iconColor),
+        ),
+        title: Text(item.title),
+        subtitle: item.subtitle.isNotEmpty ? Text(item.subtitle) : null,
+        trailing: item.time.isNotEmpty
+            ? Text(item.time, style: const TextStyle(color: AppColors.textSecondary))
+            : null,
+      )).toList(),
     );
   }
 

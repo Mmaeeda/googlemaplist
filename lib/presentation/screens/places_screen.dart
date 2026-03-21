@@ -29,58 +29,66 @@ class PlacesScreen extends ConsumerWidget {
               ref.read(searchQueryProvider.notifier).update(value),
         );
 
-        final filterChips = groups.when(
-          data: (groupList) => Wrap(
-            spacing: 8,
-            children: [
-              _FilterChip(
-                label: 'すべて',
-                isSelected: selectedGroupId == null,
-                onSelected: () =>
-                    ref.read(selectedGroupProvider.notifier).select(null),
-              ),
-              ...groupList.map((group) => _FilterChip(
-                    label: group.name,
-                    isSelected: selectedGroupId == group.id,
-                    onSelected: () =>
-                        ref.read(selectedGroupProvider.notifier).select(
-                            group.id),
-                  )),
-            ],
-          ),
-          loading: () => const SizedBox.shrink(),
-          error: (e, st) => const SizedBox.shrink(),
-        );
+        Widget buildFilterChips({bool horizontal = false}) {
+          return groups.when(
+            data: (groupList) {
+              final chips = <Widget>[
+                _FilterChip(
+                  label: 'すべて',
+                  isSelected: selectedGroupId == null,
+                  onSelected: () =>
+                      ref.read(selectedGroupProvider.notifier).select(null),
+                ),
+                ...groupList.map((group) => _FilterChip(
+                      label: group.name,
+                      isSelected: selectedGroupId == group.id,
+                      onSelected: () =>
+                          ref.read(selectedGroupProvider.notifier).select(
+                              group.id),
+                    )),
+              ];
+              if (horizontal) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: chips.map((c) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: c,
+                    )).toList(),
+                  ),
+                );
+              }
+              return Wrap(spacing: 8, children: chips);
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (e, st) => const SizedBox.shrink(),
+          );
+        }
 
-        // Mobile: scrollable layout
+        // Mobile: compact header, list fills remaining space
         if (isMobile) {
-          return SingleChildScrollView(
+          return Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '場所リスト',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
-                        fontSize: 24,
                       ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 searchField,
-                const SizedBox(height: 16),
-                filterChips,
-                const SizedBox(height: 24),
-                filteredPlaces.when(
-                  data: (places) => _PlaceList(places: places, shrinkWrap: true),
-                  loading: () => const SizedBox(
-                    height: 200,
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (e, _) => SizedBox(
-                    height: 200,
-                    child: Center(
+                const SizedBox(height: 8),
+                buildFilterChips(horizontal: true),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: filteredPlaces.when(
+                    data: (places) => _PlaceList(places: places),
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(
                       child: Text('エラー: $e',
                           style: const TextStyle(color: AppColors.googleRed)),
                     ),
@@ -111,7 +119,7 @@ class PlacesScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 32),
-              filterChips,
+              buildFilterChips(),
               const SizedBox(height: 24),
               Expanded(
                 child: filteredPlaces.when(
