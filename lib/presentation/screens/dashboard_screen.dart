@@ -490,7 +490,7 @@ class _PhotoFetchButton extends ConsumerWidget {
           children: [
             const Text(
               '場所の写真を取得するには、Google Cloud Console で '
-              'Places API を有効化し、APIキーを入力してください。',
+              'Places API (New) を有効化し、APIキーを入力してください。',
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),

@@ -29,10 +29,10 @@ class PhotoResolveResult {
   });
 }
 
-/// Resolves place photos via Google Places API.
+/// Resolves place photos via Google Places API (New).
 ///
-/// Uses the Nearby Search API to find a place by coordinates,
-/// then constructs a photo URL from the photo_reference.
+/// Uses the Nearby Search (New) API to find a place by coordinates,
+/// then fetches a direct photo URL via the Place Photos (New) API.
 class PlacesPhotoService {
   final PlaceRepository _placeRepository;
   final SyncLogger _logger;
@@ -133,7 +133,7 @@ class PlacesPhotoService {
         if (e.toString().contains('403') ||
             e.toString().contains('401') ||
             e.toString().contains('REQUEST_DENIED')) {
-          firstError = 'APIキーが無効、またはPlaces APIが未有効化です';
+          firstError = 'APIキーが無効、またはPlaces API (New)が未有効化です';
           break;
         }
       }
@@ -171,15 +171,29 @@ class PlacesPhotoService {
     required double lng,
     required String apiKey,
   }) async {
-    // Use Places API Nearby Search (GET, simpler CORS)
-    final searchUri = Uri.parse(
-      'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-      '?location=$lat,$lng'
-      '&radius=50'
-      '&key=$apiKey',
+    // Nearby Search (New): POST with JSON body
+    final searchResponse = await _httpClient.post(
+      Uri.parse('https://places.googleapis.com/v1/places:searchNearby'),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.photos',
+      },
+      body: jsonEncode({
+        'locationRestriction': {
+          'circle': {
+            'center': {'latitude': lat, 'longitude': lng},
+            'radius': 50.0,
+          },
+        },
+        'maxResultCount': 1,
+      }),
     );
 
-    final searchResponse = await _httpClient.get(searchUri);
+    if (searchResponse.statusCode == 403 ||
+        searchResponse.statusCode == 401) {
+      throw Exception('REQUEST_DENIED');
+    }
 
     if (searchResponse.statusCode != 200) {
       throw Exception(
@@ -191,30 +205,30 @@ class PlacesPhotoService {
     final searchData =
         jsonDecode(searchResponse.body) as Map<String, dynamic>;
 
-    // Check API-level error
-    final status = searchData['status'] as String?;
-    if (status == 'REQUEST_DENIED') {
-      throw Exception(
-        'REQUEST_DENIED: ${searchData['error_message'] ?? 'Unknown'}',
-      );
-    }
-    if (status != 'OK' && status != 'ZERO_RESULTS') {
-      throw Exception('API status: $status');
-    }
+    final places = searchData['places'] as List<dynamic>?;
+    if (places == null || places.isEmpty) return null;
 
-    final results = searchData['results'] as List<dynamic>?;
-    if (results == null || results.isEmpty) return null;
-
-    final firstResult = results[0] as Map<String, dynamic>;
-    final photos = firstResult['photos'] as List<dynamic>?;
+    final firstPlace = places[0] as Map<String, dynamic>;
+    final photos = firstPlace['photos'] as List<dynamic>?;
     if (photos == null || photos.isEmpty) return 'no_photo';
 
-    final photoRef = photos[0]['photo_reference'] as String?;
-    if (photoRef == null) return 'no_photo';
+    final photoName = photos[0]['name'] as String?;
+    if (photoName == null) return 'no_photo';
 
-    // Construct photo URL directly (this URL works as an image src)
-    return 'https://maps.googleapis.com/maps/api/place/photo'
-        '?maxwidth=200&photo_reference=$photoRef&key=$apiKey';
+    // Place Photos (New): get direct CDN URL via skipHttpRedirect
+    final photoResponse = await _httpClient.get(
+      Uri.parse(
+        'https://places.googleapis.com/v1/$photoName/media'
+        '?maxWidthPx=200&skipHttpRedirect=true',
+      ),
+      headers: {'X-Goog-Api-Key': apiKey},
+    );
+
+    if (photoResponse.statusCode != 200) return 'no_photo';
+
+    final photoData =
+        jsonDecode(photoResponse.body) as Map<String, dynamic>;
+    return photoData['photoUri'] as String?;
   }
 
   /// Extract (lat, lng) from rawPayloadJson or mapsUrl.
