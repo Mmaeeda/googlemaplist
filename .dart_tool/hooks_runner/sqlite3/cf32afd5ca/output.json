@@ -1,0 +1,17 @@
+{
+  "assets": [
+    {
+      "encoding": {
+        "file": "/Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/sqlite3/build/download-194e655/libsqlite3.dylib",
+        "id": "package:sqlite3/src/ffi/libsqlite3.g.dart",
+        "link_mode": {
+          "type": "dynamic_loading_bundle"
+        }
+      },
+      "type": "code_assets/code"
+    }
+  ],
+  "assets_for_linking": {},
+  "status": "success",
+  "timestamp": "2026-03-15 19:47:13.000"
+}

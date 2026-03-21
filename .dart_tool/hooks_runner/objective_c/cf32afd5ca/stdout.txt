@@ -1,0 +1,67 @@
+Running `(cd /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/; TMPDIR=/var/folders/cb/dm6d5m_533g1nlpcskbvcy2m0000gn/T/ PATH=/Users/mae.atsu/.venv/bin:/usr/local/bin:/usr/local/sbin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Users/mae.atsu/.cursor/extensions/ms-python.debugpy-2025.18.0-darwin-x64/bundled/scripts/noConfigScripts HOME=/Users/mae.atsu /usr/local/share/flutter/bin/cache/dart-sdk/bin/dart --packages=/Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/package_config.json /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/objective_c/cf32afd5ca/hook.dill --config=/Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/objective_c/cf32afd5ca/input.json )`.
+INFO: 2026-03-15 19:47:11.872843: Running `which clang`.
+
+INFO: 2026-03-15 19:47:11.906644: Running `/usr/bin/clang --version`.
+
+INFO: 2026-03-15 19:47:11.948725: Running `/usr/bin/clang --version`.
+
+INFO: 2026-03-15 19:47:11.990837: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/include/dart_api_dl.c -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-03-15 19:47:11.991527: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/objective_c.c -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c.c.o
+
+INFO: 2026-03-15 19:47:11.991924: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/test/util.c -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/test/util.c.o
+
+INFO: 2026-03-15 19:47:11.992143: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/input_stream_adapter.m -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-03-15 19:47:11.992574: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/objective_c.m -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c.m.o
+
+INFO: 2026-03-15 19:47:11.992820: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/observer.m -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/observer.m.o
+
+INFO: 2026-03-15 19:47:11.993047: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/ns_number.m -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/ns_number.m.o
+
+INFO: 2026-03-15 19:47:11.993244: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/protocol.m -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/protocol.m.o
+
+INFO: 2026-03-15 19:47:11.993439: Running: /usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/mae.atsu/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/objective_c_bindings_generated.m -fpic -I src -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-03-15 19:47:12.086907: 
+
+INFO: 2026-03-15 19:47:12.087422: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-03-15 19:47:12.092079: 
+INFO: 2026-03-15 19:47:12.092163: 
+INFO: 2026-03-15 19:47:12.092210: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c.c.o
+
+INFO: 2026-03-15 19:47:12.121867: 
+INFO: 2026-03-15 19:47:12.121916: 
+INFO: 2026-03-15 19:47:12.121942: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/test/util.c.o
+
+INFO: 2026-03-15 19:47:12.131495: 
+INFO: 2026-03-15 19:47:12.131557: 
+INFO: 2026-03-15 19:47:12.131578: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/observer.m.o
+
+INFO: 2026-03-15 19:47:12.136252: 
+INFO: 2026-03-15 19:47:12.136297: 
+INFO: 2026-03-15 19:47:12.136318: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/protocol.m.o
+
+INFO: 2026-03-15 19:47:12.497899: 
+INFO: 2026-03-15 19:47:12.497950: 
+INFO: 2026-03-15 19:47:12.497970: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/ns_number.m.o
+
+INFO: 2026-03-15 19:47:12.505890: 
+INFO: 2026-03-15 19:47:12.505951: 
+INFO: 2026-03-15 19:47:12.505973: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c.m.o
+
+INFO: 2026-03-15 19:47:12.512355: 
+INFO: 2026-03-15 19:47:12.512402: 
+INFO: 2026-03-15 19:47:12.512424: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-03-15 19:47:12.541401: 
+INFO: 2026-03-15 19:47:12.541459: 
+INFO: 2026-03-15 19:47:12.541480: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-03-15 19:47:12.542120: Running: /usr/bin/clang -shared -Wl,-encryptable -undefined dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target x86_64-apple-darwin -mmacos-version-min=12 /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/include/dart_api_dl.c.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c.c.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/test/util.c.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/input_stream_adapter.m.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c.m.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/observer.m.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/ns_number.m.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/protocol.m.o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/obj/src/objective_c_bindings_generated.m.o -o /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/objective_c.dylib
+
+INFO: 2026-03-15 19:47:12.635765: 
+INFO: 2026-03-15 19:47:12.635941: 
+INFO: 2026-03-15 19:47:12.635973: Generated /Users/mae.atsu/.claude/tool/maps_saved_app/.dart_tool/hooks_runner/shared/objective_c/build/cf32afd5ca/objective_c.dylib
+
