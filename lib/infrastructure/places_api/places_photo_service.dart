@@ -232,6 +232,13 @@ class PlacesPhotoService {
   }
 
   /// Extract (lat, lng) from rawPayloadJson or mapsUrl.
+  ///
+  /// Supports multiple Google Maps URL formats:
+  ///   - GeoJSON geometry.coordinates (from 保存した場所.json)
+  ///   - ?q=lat,lng
+  ///   - @lat,lng,zoom (common in Google Maps URLs)
+  ///   - !3dlat!4dlng (in data= parameter)
+  ///   - ll=lat,lng (query parameter)
   (double, double)? _extractCoordinates(Place place) {
     if (place.rawPayloadJson != null) {
       try {
@@ -250,18 +257,56 @@ class PlacesPhotoService {
     }
 
     if (place.mapsUrl != null) {
+      final url = place.mapsUrl!;
+
+      // Pattern 1: ?q=lat,lng or &q=lat,lng
       final qMatch =
-          RegExp(r'[?&]q=([-\d.]+),([-\d.]+)').firstMatch(place.mapsUrl!);
+          RegExp(r'[?&]q=([-\d.]+),([-\d.]+)').firstMatch(url);
       if (qMatch != null) {
-        try {
-          return (
-            double.parse(qMatch.group(1)!),
-            double.parse(qMatch.group(2)!),
-          );
-        } catch (_) {}
+        final parsed = _tryParseCoords(qMatch.group(1)!, qMatch.group(2)!);
+        if (parsed != null) return parsed;
+      }
+
+      // Pattern 2: @lat,lng (e.g. /place/Name/@35.658,139.745,17z/)
+      final atMatch =
+          RegExp(r'@([-\d.]+),([-\d.]+)').firstMatch(url);
+      if (atMatch != null) {
+        final parsed = _tryParseCoords(atMatch.group(1)!, atMatch.group(2)!);
+        if (parsed != null) return parsed;
+      }
+
+      // Pattern 3: !3dlat!4dlng (in data= parameter)
+      final dataMatch =
+          RegExp(r'!3d([-\d.]+)!4d([-\d.]+)').firstMatch(url);
+      if (dataMatch != null) {
+        final parsed =
+            _tryParseCoords(dataMatch.group(1)!, dataMatch.group(2)!);
+        if (parsed != null) return parsed;
+      }
+
+      // Pattern 4: ll=lat,lng
+      final llMatch =
+          RegExp(r'[?&]ll=([-\d.]+),([-\d.]+)').firstMatch(url);
+      if (llMatch != null) {
+        final parsed =
+            _tryParseCoords(llMatch.group(1)!, llMatch.group(2)!);
+        if (parsed != null) return parsed;
       }
     }
 
+    return null;
+  }
+
+  /// Try to parse lat/lng strings, returning null on failure.
+  static (double, double)? _tryParseCoords(String latStr, String lngStr) {
+    try {
+      final lat = double.parse(latStr);
+      final lng = double.parse(lngStr);
+      // Basic validation: lat -90..90, lng -180..180
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return (lat, lng);
+      }
+    } catch (_) {}
     return null;
   }
 
