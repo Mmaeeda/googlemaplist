@@ -241,5 +241,47 @@ void main() {
         expect(result.records[0].fields['メモ'], equals('美味しい'));
       });
     });
+
+    group('line ending handling', () {
+      test('handles bare \\r line endings (Google Takeout 保存済み format)', () {
+        // Google Takeout "保存済み" CSVs use \r only line endings
+        const csv = 'タイトル,メモ,URL,タグ,コメント\r'
+            '竹楽亭,,https://www.google.com/maps/place/data,,\r'
+            '渋谷カフェ,美味しい,https://www.google.com/maps/place/cafe,,\r';
+
+        final result = parser.parseString(csv);
+
+        expect(result.headers,
+            equals(['タイトル', 'メモ', 'url', 'タグ', 'コメント']));
+        expect(result.records, hasLength(2));
+        expect(result.records[0].fields['タイトル'], equals('竹楽亭'));
+        expect(result.records[0].fields['url'],
+            equals('https://www.google.com/maps/place/data'));
+        expect(result.records[1].fields['タイトル'], equals('渋谷カフェ'));
+        expect(result.records[1].fields['メモ'], equals('美味しい'));
+      });
+
+      test('handles \\n only line endings', () {
+        const csv = 'Title,URL\n'
+            'Cafe,https://example.com\n'
+            'Shop,https://example2.com\n';
+
+        final result = parser.parseString(csv);
+
+        expect(result.records, hasLength(2));
+        expect(result.records[0].fields['title'], equals('Cafe'));
+        expect(result.records[1].fields['title'], equals('Shop'));
+      });
+
+      test('handles mixed line endings', () {
+        const csv = 'Title,URL\r\n'
+            'Cafe,https://example.com\r'
+            'Shop,https://example2.com\n';
+
+        final result = parser.parseString(csv);
+
+        expect(result.records, hasLength(2));
+      });
+    });
   });
 }

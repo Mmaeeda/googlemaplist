@@ -19,7 +19,7 @@ class PlaceNormalizer {
     ],
     'comments': [
       'comments', 'comment', 'description',
-      'コメント', '説明',
+      'コメント', '説明', 'タグ',
     ],
     'collectionName': [
       'collection_name', 'list_name', 'list', 'collection',

@@ -49,7 +49,7 @@
   <!-- Service worker cache buster: unregister old SWs on version mismatch -->
   <script>
     (function() {
-      var APP_VERSION = '20260322d';
+      var APP_VERSION = '20260322e';
       if ('serviceWorker' in navigator && localStorage.getItem('app_v') !== APP_VERSION) {
         var hadSW = false;
         navigator.serviceWorker.getRegistrations().then(function(regs) {

@@ -36,9 +36,14 @@ class CsvParser {
     final records = <RawPlaceRecord>[];
     var skippedCount = 0;
 
+    // Normalize line endings: Google Takeout "保存済み" CSVs may use
+    // bare \r (carriage return) which CsvToListConverter does not detect.
+    content = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
     final rows = const CsvToListConverter(
       shouldParseNumbers: false,
       allowInvalid: true,
+      eol: '\n',
     ).convert(content);
 
     if (rows.isEmpty) {
