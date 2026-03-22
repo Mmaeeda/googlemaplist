@@ -71,6 +71,22 @@ class DashboardScreen extends ConsumerWidget {
                       : Text(isSyncing ? '同期中...' : '今すぐ同期'),
                 ),
                 const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: isSyncing
+                      ? null
+                      : () => ref
+                            .read(syncActionProvider.notifier)
+                            .rebuildClassification(),
+                  icon: const Icon(Icons.category),
+                  label: isMobile
+                      ? const Text('')
+                      : const Text('再分類'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.googleYellow.withValues(alpha: 0.15),
+                    foregroundColor: AppColors.googleYellow,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 _PhotoFetchButton(isMobile: isMobile),
                 const SizedBox(width: 8),
                 IconButton(
@@ -128,10 +144,12 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    '同期完了: 新規${value.newCount}件 / 更新${value.updatedCount}件 / 未変更${value.unchangedCount}件\n'
-                    'アーカイブ${value.archiveGroupCount}件 / データファイル${value.dataFileCount}件 / レコード${value.parsedRecordCount}件'
-                    '${value.archiveName != null ? '\n${value.archiveName}' : ''}'
-                    '${value.fileBreakdown.isNotEmpty ? '\n${value.fileBreakdown.entries.map((e) => '${e.key}: ${e.value}').join('\n')}' : ''}',
+                    value.status == 'classification_rebuilt'
+                        ? '再分類完了: 全場所の分類を更新しました'
+                        : '同期完了: 新規${value.newCount}件 / 更新${value.updatedCount}件 / 未変更${value.unchangedCount}件\n'
+                          'アーカイブ${value.archiveGroupCount}件 / データファイル${value.dataFileCount}件 / レコード${value.parsedRecordCount}件'
+                          '${value.archiveName != null ? '\n${value.archiveName}' : ''}'
+                          '${value.fileBreakdown.isNotEmpty ? '\n${value.fileBreakdown.entries.map((e) => '${e.key}: ${e.value}').join('\n')}' : ''}',
                     style: TextStyle(color: AppColors.primary, fontSize: 13),
                   ),
                 ),

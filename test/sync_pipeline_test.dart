@@ -531,10 +531,19 @@ void main() {
       final groups =
           await placeGroupRepository.listByPlaceId(sakuraPlace.id);
 
-      for (final pg in groups) {
-        expect(pg.source, equals('rule'));
+      // Rule-based groups have source 'rule', collection-based have 'collection'
+      final ruleGroups = groups.where((pg) => pg.source == 'rule').toList();
+      final collectionGroups =
+          groups.where((pg) => pg.source == 'collection').toList();
+
+      expect(ruleGroups, isNotEmpty, reason: 'Should have rule-based groups');
+      for (final pg in ruleGroups) {
         expect(pg.confidence, equals(1.0));
       }
+
+      // Place has collectionName 'お花見スポット' → gets a collection group
+      expect(collectionGroups, hasLength(1));
+      expect(collectionGroups.first.confidence, equals(1.0));
     });
 
     test('second sync with same data results in no changes', () async {
@@ -640,8 +649,8 @@ void main() {
       expect(cafePlace.isHidden, isFalse);
     });
 
-    test('place with no classification rules match gets assigned to 未分類', () async {
-      // CSV with a place that matches no rules
+    test('place with no classification rules match gets collection group', () async {
+      // CSV with a place that matches no rules but has a collectionName
       final noMatchCsv = [
         'Title,URL,Note,Comments,Collection Name',
         '普通の場所,https://maps.google.com/place99,特になし,,その他',
@@ -661,8 +670,14 @@ void main() {
       final groups =
           await placeGroupRepository.listByPlaceId(place.id);
 
+      // Place has collectionName 'その他' → auto-creates a collection group
       expect(groups, hasLength(1));
-      expect(groups.first.groupId, equals('group-unclassified'));
+      expect(groups.first.source, equals('collection'));
+
+      // Verify the auto-created group
+      final autoGroup = await groupRepository.findById(groups.first.groupId);
+      expect(autoGroup, isNotNull);
+      expect(autoGroup!.name, equals('その他'));
     });
 
     test('new place added in second sync is correctly processed', () async {

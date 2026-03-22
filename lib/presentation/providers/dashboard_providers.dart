@@ -63,4 +63,30 @@ class SyncActionNotifier extends Notifier<AsyncValue<SyncSummary?>> {
       state = AsyncError(e, st);
     }
   }
+
+  /// Rebuild classification for all existing places.
+  /// Creates collection-name-based groups and re-applies all rules.
+  Future<void> rebuildClassification() async {
+    if (state is AsyncLoading) return;
+
+    state = const AsyncLoading();
+    try {
+      final orchestrator = ref.read(classificationOrchestratorProvider);
+      await orchestrator.rebuildAll();
+      state = AsyncData(const SyncSummary(status: 'classification_rebuilt'));
+
+      ref.invalidate(filteredPlacesProvider);
+      ref.invalidate(groupListProvider);
+    } on AppError catch (e, st) {
+      if (e.code == AppErrorCode.tokenExpired ||
+          e.code == AppErrorCode.authRequired) {
+        await ref.read(authStateProvider.notifier).signOut();
+        state = const AsyncData(null);
+      } else {
+        state = AsyncError(e, st);
+      }
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
 }

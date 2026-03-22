@@ -11,6 +11,7 @@ import '../../domain/repositories/group_repository.dart';
 import '../../domain/repositories/place_group_repository.dart';
 import '../../domain/repositories/place_repository.dart';
 import '../../domain/repositories/sync_job_repository.dart';
+import '../../infrastructure/classification/classification_engine.dart';
 import '../../infrastructure/database/app_database.dart';
 import '../../infrastructure/logging/sync_logger.dart';
 
@@ -38,6 +39,10 @@ final syncLoggerProvider = Provider<SyncLogger>((ref) =>
 
 final syncPipelineRunProvider =
     Provider<Future<SyncSummary> Function()>((ref) =>
+        throw UnsupportedError('Platform not supported'));
+
+final classificationOrchestratorProvider =
+    Provider<ClassificationOrchestrator>((ref) =>
         throw UnsupportedError('Platform not supported'));
 
 final authStateProvider =

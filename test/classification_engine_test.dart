@@ -1,8 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:maps_saved_app/domain/models/classification_rule.dart';
+import 'package:maps_saved_app/domain/models/group.dart';
 import 'package:maps_saved_app/domain/models/place.dart';
+import 'package:maps_saved_app/domain/models/place_group.dart';
 import 'package:maps_saved_app/domain/repositories/classification_rule_repository.dart';
+import 'package:maps_saved_app/domain/repositories/group_repository.dart';
+import 'package:maps_saved_app/domain/repositories/place_group_repository.dart';
+import 'package:maps_saved_app/domain/repositories/place_repository.dart';
 import 'package:maps_saved_app/infrastructure/classification/classification_engine.dart';
 import 'package:maps_saved_app/infrastructure/logging/sync_logger.dart';
 
@@ -529,4 +534,306 @@ void main() {
       });
     });
   });
+
+  group('ClassificationOrchestrator', () {
+    late InMemoryClassificationRuleRepository ruleRepo;
+    late InMemoryPlaceRepository placeRepo;
+    late InMemoryPlaceGroupRepository placeGroupRepo;
+    late InMemoryGroupRepository groupRepo;
+    late RuleBasedClassificationEngine classifier;
+    late ClassificationOrchestrator orchestrator;
+    late NoOpSyncLogger log;
+
+    setUp(() {
+      ruleRepo = InMemoryClassificationRuleRepository();
+      placeRepo = InMemoryPlaceRepository();
+      placeGroupRepo = InMemoryPlaceGroupRepository();
+      groupRepo = InMemoryGroupRepository();
+      log = NoOpSyncLogger();
+      classifier = RuleBasedClassificationEngine(ruleRepo, log);
+      orchestrator = ClassificationOrchestrator(
+        classifier,
+        placeRepo,
+        placeGroupRepo,
+        groupRepo,
+        log,
+      );
+    });
+
+    group('collection-name-based auto-grouping', () {
+      test('creates group from collectionName and assigns place', () async {
+        final place = createTestPlace(
+          id: 'p1',
+          sourceTitle: 'Tokyo Tower',
+          collectionName: 'お気に入りの場所',
+        );
+        placeRepo.add(place);
+
+        await orchestrator.rebuildForPlaces(['p1']);
+
+        // Group should be auto-created
+        final group = await groupRepo.findByName('お気に入りの場所');
+        expect(group, isNotNull);
+        expect(group!.iconName, equals('favorite'));
+        expect(group.colorKey, equals('red'));
+
+        // Place should be assigned to the group
+        final placeGroups = await placeGroupRepo.listByPlaceId('p1');
+        expect(placeGroups.any((pg) => pg.groupId == group.id), isTrue);
+        expect(
+          placeGroups.firstWhere((pg) => pg.groupId == group.id).source,
+          equals('collection'),
+        );
+      });
+
+      test('reuses existing group with same name', () async {
+        // Pre-create group
+        final existingGroup = Group(
+          id: 'existing-group-id',
+          name: 'お気に入りの場所',
+          iconName: 'star',
+          colorKey: 'gold',
+          sortOrder: 10,
+        );
+        await groupRepo.upsert(existingGroup);
+
+        final place = createTestPlace(
+          id: 'p1',
+          collectionName: 'お気に入りの場所',
+        );
+        placeRepo.add(place);
+
+        await orchestrator.rebuildForPlaces(['p1']);
+
+        // Should use existing group, not create a new one
+        final groups = await groupRepo.listAll();
+        final matching =
+            groups.where((g) => g.name == 'お気に入りの場所').toList();
+        expect(matching, hasLength(1));
+        expect(matching.first.id, equals('existing-group-id'));
+      });
+
+      test('rule-based AND collection-based groups both assigned', () async {
+        // Set up a rule that matches
+        ruleRepo.seed([
+          ClassificationRule(
+            id: 'rule-food',
+            groupId: 'group-food',
+            pattern: '飲食店',
+            targetFields: ['collectionName'],
+          ),
+        ]);
+
+        // Pre-create the rule's target group
+        await groupRepo.upsert(const Group(
+          id: 'group-food',
+          name: '飲食店',
+          iconName: 'restaurant',
+          colorKey: 'amber',
+          sortOrder: 6,
+        ));
+
+        final place = createTestPlace(
+          id: 'p1',
+          sourceTitle: 'ラーメン屋',
+          collectionName: 'パン・飲食店',
+        );
+        placeRepo.add(place);
+
+        await orchestrator.rebuildForPlaces(['p1']);
+
+        final placeGroups = await placeGroupRepo.listByPlaceId('p1');
+        // Should have both: rule-based (飲食店) and collection-based (パン・飲食店)
+        expect(placeGroups.length, greaterThanOrEqualTo(2));
+
+        final sources = placeGroups.map((pg) => pg.source).toSet();
+        expect(sources, contains('rule'));
+        expect(sources, contains('collection'));
+      });
+
+      test('place without collectionName only gets rule-based groups',
+          () async {
+        ruleRepo.seed([
+          ClassificationRule(
+            id: 'rule-cafe',
+            groupId: 'group-cafe',
+            pattern: 'カフェ',
+            targetFields: ['title'],
+          ),
+        ]);
+
+        await groupRepo.upsert(const Group(
+          id: 'group-cafe',
+          name: 'カフェ',
+          iconName: 'local_cafe',
+          colorKey: 'brown',
+          sortOrder: 10,
+        ));
+
+        final place = createTestPlace(
+          id: 'p1',
+          sourceTitle: 'おしゃれカフェ',
+          // No collectionName
+        );
+        placeRepo.add(place);
+
+        await orchestrator.rebuildForPlaces(['p1']);
+
+        final placeGroups = await placeGroupRepo.listByPlaceId('p1');
+        expect(placeGroups, hasLength(1));
+        expect(placeGroups.first.source, equals('rule'));
+        expect(placeGroups.first.groupId, equals('group-cafe'));
+      });
+
+      test('place with no matches and no collection goes to 未分類',
+          () async {
+        await groupRepo.upsert(const Group(
+          id: 'group-uncat',
+          name: '未分類',
+          iconName: 'help_outline',
+          colorKey: 'grey',
+          sortOrder: 99,
+          systemGroup: true,
+        ));
+
+        final place = createTestPlace(
+          id: 'p1',
+          sourceTitle: 'Random Place',
+          // No collectionName, no matching rules
+        );
+        placeRepo.add(place);
+
+        await orchestrator.rebuildForPlaces(['p1']);
+
+        final placeGroups = await placeGroupRepo.listByPlaceId('p1');
+        expect(placeGroups, hasLength(1));
+        expect(placeGroups.first.groupId, equals('group-uncat'));
+      });
+
+      test('行ってみたい collection gets explore icon', () async {
+        final place = createTestPlace(
+          id: 'p1',
+          collectionName: '行ってみたい',
+        );
+        placeRepo.add(place);
+
+        await orchestrator.rebuildForPlaces(['p1']);
+
+        final group = await groupRepo.findByName('行ってみたい');
+        expect(group, isNotNull);
+        expect(group!.iconName, equals('explore'));
+        expect(group.colorKey, equals('blue'));
+      });
+
+      test('multiple places with same collectionName share one group',
+          () async {
+        placeRepo.add(createTestPlace(
+          id: 'p1',
+          collectionName: 'スター付きの場所',
+        ));
+        placeRepo.add(createTestPlace(
+          id: 'p2',
+          collectionName: 'スター付きの場所',
+        ));
+
+        await orchestrator.rebuildForPlaces(['p1', 'p2']);
+
+        // Only one group created
+        final groups = await groupRepo.listAll();
+        final starGroups =
+            groups.where((g) => g.name == 'スター付きの場所').toList();
+        expect(starGroups, hasLength(1));
+
+        // Both places assigned to same group
+        final pg1 = await placeGroupRepo.listByPlaceId('p1');
+        final pg2 = await placeGroupRepo.listByPlaceId('p2');
+        expect(pg1.first.groupId, equals(pg2.first.groupId));
+      });
+    });
+  });
+}
+
+// ── In-memory test doubles for ClassificationOrchestrator ──
+
+class InMemoryPlaceRepository implements PlaceRepository {
+  final _places = <String, Place>{};
+
+  void add(Place place) => _places[place.id] = place;
+
+  @override
+  Future<Place?> findById(String id) async => _places[id];
+
+  @override
+  Future<Place?> findBySourceKey(String sourceKey) async =>
+      _places.values.cast<Place?>().firstWhere(
+            (p) => p!.sourceKey == sourceKey,
+            orElse: () => null,
+          );
+
+  @override
+  Future<void> insert(Place place) async => _places[place.id] = place;
+
+  @override
+  Future<void> update(Place place) async => _places[place.id] = place;
+
+  @override
+  Future<void> updateTitle(String placeId, String? newTitle) async {}
+
+  @override
+  Future<void> markMissing(String placeId) async {}
+
+  @override
+  Future<List<Place>> listMissingCandidates() async => [];
+
+  @override
+  Future<List<Place>> listAllActive() async => _places.values.toList();
+
+  @override
+  Future<List<Place>> listAll() async => _places.values.toList();
+}
+
+class InMemoryGroupRepository implements GroupRepository {
+  final _groups = <String, Group>{};
+
+  @override
+  Future<List<Group>> listAll() async => _groups.values.toList();
+
+  @override
+  Future<Group?> findById(String id) async => _groups[id];
+
+  @override
+  Future<Group?> findByName(String name) async =>
+      _groups.values.cast<Group?>().firstWhere(
+            (g) => g!.name == name,
+            orElse: () => null,
+          );
+
+  @override
+  Future<void> upsert(Group group) async => _groups[group.id] = group;
+
+  @override
+  Future<void> delete(String groupId) async => _groups.remove(groupId);
+}
+
+class InMemoryPlaceGroupRepository implements PlaceGroupRepository {
+  final _groups = <PlaceGroup>[];
+
+  @override
+  Future<void> replaceAutoGroups(
+      String placeId, List<PlaceGroup> groups) async {
+    _groups.removeWhere(
+        (pg) => pg.placeId == placeId && pg.source != 'manual');
+    _groups.addAll(groups);
+  }
+
+  @override
+  Future<List<PlaceGroup>> listByPlaceId(String placeId) async =>
+      _groups.where((pg) => pg.placeId == placeId).toList();
+
+  @override
+  Future<List<PlaceGroup>> listAll() async => List.unmodifiable(_groups);
+
+  @override
+  Future<void> insertManualGroup(PlaceGroup placeGroup) async =>
+      _groups.add(placeGroup);
 }

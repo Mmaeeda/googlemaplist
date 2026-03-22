@@ -1,5 +1,8 @@
+import 'package:uuid/uuid.dart';
+
 import '../../domain/models/classification_hit.dart';
 import '../../domain/models/classification_rule.dart';
+import '../../domain/models/group.dart';
 import '../../domain/models/place.dart';
 import '../../domain/models/place_group.dart';
 import '../../domain/repositories/classification_rule_repository.dart';
@@ -110,11 +113,16 @@ class RuleBasedClassificationEngine implements PlaceClassifier {
 
 /// Orchestrates classification for a set of places.
 class ClassificationOrchestrator {
+  static const _uuid = Uuid();
+
   final PlaceClassifier _classifier;
   final PlaceRepository _placeRepository;
   final PlaceGroupRepository _placeGroupRepository;
   final GroupRepository _groupRepository;
   final SyncLogger _logger;
+
+  /// Cache: collectionName → Group (avoids repeated DB lookups)
+  final _collectionGroupCache = <String, Group>{};
 
   ClassificationOrchestrator(
     this._classifier,
@@ -141,6 +149,7 @@ class ClassificationOrchestrator {
 
   /// Rebuild classification for all active places.
   Future<void> rebuildAll() async {
+    _collectionGroupCache.clear();
     final places = await _placeRepository.listAllActive();
     final placeIds = places
         .where((p) => !p.manualGroupOverride)
@@ -163,8 +172,36 @@ class ClassificationOrchestrator {
       final groups = <PlaceGroup>[];
       final now = DateTime.now();
 
-      if (hits.isEmpty && unclassifiedGroupId != null) {
-        // Assign to "未分類" group
+      // Rule-based hits
+      for (final hit in hits) {
+        groups.add(PlaceGroup(
+          placeId: placeId,
+          groupId: hit.groupId,
+          source: hit.source,
+          confidence: hit.confidence,
+          createdAt: now,
+        ));
+      }
+
+      // Collection-name-based auto-grouping:
+      // CSV places have collectionName derived from filename (e.g. "お気に入りの場所").
+      // Auto-create a group for each unique collectionName and assign the place to it.
+      if (place.collectionName != null && place.collectionName!.isNotEmpty) {
+        final collectionGroup =
+            await _ensureCollectionGroup(place.collectionName!);
+        if (!groups.any((g) => g.groupId == collectionGroup.id)) {
+          groups.add(PlaceGroup(
+            placeId: placeId,
+            groupId: collectionGroup.id,
+            source: 'collection',
+            confidence: 1.0,
+            createdAt: now,
+          ));
+        }
+      }
+
+      // If still no groups, assign to "未分類"
+      if (groups.isEmpty && unclassifiedGroupId != null) {
         groups.add(PlaceGroup(
           placeId: placeId,
           groupId: unclassifiedGroupId,
@@ -172,16 +209,6 @@ class ClassificationOrchestrator {
           confidence: 1.0,
           createdAt: now,
         ));
-      } else {
-        for (final hit in hits) {
-          groups.add(PlaceGroup(
-            placeId: placeId,
-            groupId: hit.groupId,
-            source: hit.source,
-            confidence: hit.confidence,
-            createdAt: now,
-          ));
-        }
       }
 
       // Replace auto groups (preserves manual groups)
@@ -194,16 +221,86 @@ class ClassificationOrchestrator {
 
       // On failure, assign to "未分類" if available
       if (unclassifiedGroupId != null) {
-        await _placeGroupRepository.replaceAutoGroups(placeId, [
-          PlaceGroup(
-            placeId: placeId,
-            groupId: unclassifiedGroupId,
-            source: 'rule',
-            confidence: 0.0,
-            createdAt: DateTime.now(),
-          ),
-        ]);
+        try {
+          await _placeGroupRepository.replaceAutoGroups(placeId, [
+            PlaceGroup(
+              placeId: placeId,
+              groupId: unclassifiedGroupId,
+              source: 'rule',
+              confidence: 0.0,
+              createdAt: DateTime.now(),
+            ),
+          ]);
+        } catch (_) {
+          // Best-effort fallback
+        }
       }
     }
+  }
+
+  /// Find or create a group for the given collection name.
+  Future<Group> _ensureCollectionGroup(String collectionName) async {
+    if (_collectionGroupCache.containsKey(collectionName)) {
+      return _collectionGroupCache[collectionName]!;
+    }
+
+    var group = await _groupRepository.findByName(collectionName);
+    if (group == null) {
+      group = Group(
+        id: _uuid.v4(),
+        name: collectionName,
+        iconName: _iconForCollection(collectionName),
+        colorKey: _colorForCollection(collectionName),
+        sortOrder: 50,
+      );
+      await _groupRepository.upsert(group);
+      _logger.info('auto_created_collection_group', {
+        'groupName': collectionName,
+        'groupId': group.id,
+      });
+    }
+
+    _collectionGroupCache[collectionName] = group;
+    return group;
+  }
+
+  /// Choose an icon based on common collection name patterns.
+  static String _iconForCollection(String name) {
+    if (name.contains('お気に入り') || name.contains('favorite')) {
+      return 'favorite';
+    }
+    if (name.contains('行ってみたい') ||
+        name.contains('行きたい') ||
+        name.contains('want')) {
+      return 'explore';
+    }
+    if (name.contains('スター') || name.contains('star')) return 'star';
+    if (name.contains('旗') || name.contains('flag')) return 'flag';
+    if (name.contains('飲食') ||
+        name.contains('カフェ') ||
+        name.contains('パン') ||
+        name.contains('restaurant')) {
+      return 'restaurant';
+    }
+    return 'folder';
+  }
+
+  /// Choose a color based on common collection name patterns.
+  static String _colorForCollection(String name) {
+    if (name.contains('お気に入り') || name.contains('favorite')) return 'red';
+    if (name.contains('行ってみたい') ||
+        name.contains('行きたい') ||
+        name.contains('want')) {
+      return 'blue';
+    }
+    if (name.contains('スター') || name.contains('star')) return 'amber';
+    if (name.contains('旗') || name.contains('flag')) return 'green';
+    if (name.contains('飲食') ||
+        name.contains('カフェ') ||
+        name.contains('パン') ||
+        name.contains('restaurant')) {
+      return 'orange';
+    }
+    return 'teal';
   }
 }
