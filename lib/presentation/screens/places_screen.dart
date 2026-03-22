@@ -141,12 +141,10 @@ class PlacesScreen extends ConsumerWidget {
 
 class _PlaceList extends ConsumerWidget {
   final List<PlaceWithGroups> places;
-  final bool shrinkWrap;
   final bool isMobile;
 
   const _PlaceList({
     required this.places,
-    this.shrinkWrap = false,
     this.isMobile = false,
   });
 
@@ -169,8 +167,7 @@ class _PlaceList extends ConsumerWidget {
 
     return Card(
       child: ListView.separated(
-        shrinkWrap: shrinkWrap,
-        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+        shrinkWrap: false,
         itemCount: places.length,
         separatorBuilder: (context, index) => const Divider(),
         itemBuilder: (context, index) {
