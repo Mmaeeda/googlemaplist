@@ -117,11 +117,13 @@ class CsvParser {
 
   /// Normalize header names to a canonical form.
   /// Preserves Unicode characters (Japanese etc.) while cleaning whitespace.
+  /// Note: Dart's \w with unicode:true is still ASCII-only [a-zA-Z0-9_],
+  /// so we use \p{L}\p{N} to match all Unicode letters and numbers.
   String _normalizeHeader(String header) {
     return header
         .trim()
         .toLowerCase()
         .replaceAll(RegExp(r'\s+'), '_')
-        .replaceAll(RegExp(r'[^\w]', unicode: true), '');
+        .replaceAll(RegExp(r'[^\p{L}\p{N}_]', unicode: true), '');
   }
 }

@@ -238,6 +238,7 @@ class WebSyncOrchestrator implements SyncPipeline {
       final allNormalized = <NormalizedPlaceRecord>[];
       var totalSkippedRows = 0;
       var failedCsvCount = 0;
+      final fileBreakdown = <String, int>{};
 
       for (final candidate in csvCandidates) {
         try {
@@ -267,6 +268,9 @@ class WebSyncOrchestrator implements SyncPipeline {
               );
             }
 
+            final shortName = candidate.fileName.split('/').last;
+            fileBreakdown[shortName] = parseResult.records.length;
+
             logger.info('geojson_parse_completed', {
               'fileName': candidate.fileName,
               'recordCount': parseResult.records.length,
@@ -295,6 +299,9 @@ class WebSyncOrchestrator implements SyncPipeline {
                     : normalized.copyWith(collectionName: csvCollectionName),
               );
             }
+
+            final shortName = candidate.fileName.split('/').last;
+            fileBreakdown[shortName] = parseResult.records.length;
 
             logger.info('csv_parse_completed', {
               'fileName': candidate.fileName,
@@ -401,6 +408,7 @@ class WebSyncOrchestrator implements SyncPipeline {
         archiveGroupCount: usedArchiveNames.length,
         dataFileCount: csvCandidates.length,
         parsedRecordCount: allNormalized.length,
+        fileBreakdown: fileBreakdown,
       );
 
       syncTimer({

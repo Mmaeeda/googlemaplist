@@ -12,6 +12,8 @@ class SyncSummary {
   final int dataFileCount;
   /// Total normalized records parsed
   final int parsedRecordCount;
+  /// Per-file breakdown: fileName → recordCount
+  final Map<String, int> fileBreakdown;
 
   const SyncSummary({
     required this.status,
@@ -24,6 +26,7 @@ class SyncSummary {
     this.archiveGroupCount = 0,
     this.dataFileCount = 0,
     this.parsedRecordCount = 0,
+    this.fileBreakdown = const {},
   });
 
   @override

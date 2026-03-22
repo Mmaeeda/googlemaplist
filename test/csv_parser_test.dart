@@ -212,6 +212,34 @@ void main() {
         expect(result.records[0].fields['note'],
             equals('\u7f8e\u3057\u3044\u666f\u8272'));
       });
+
+      test('Japanese headers are preserved after normalization', () {
+        const csv = 'タイトル,URL,メモ,コメント\r\n'
+            '東京タワー,https://maps.google.com/?cid=123,いい場所,おすすめ\r\n';
+
+        final result = parser.parseString(csv);
+
+        expect(result.headers, equals(['タイトル', 'url', 'メモ', 'コメント']));
+        expect(result.records, hasLength(1));
+        expect(result.records[0].fields['タイトル'], equals('東京タワー'));
+        expect(result.records[0].fields['url'],
+            equals('https://maps.google.com/?cid=123'));
+        expect(result.records[0].fields['メモ'], equals('いい場所'));
+        expect(result.records[0].fields['コメント'], equals('おすすめ'));
+      });
+
+      test('mixed Japanese and English headers are normalized correctly', () {
+        const csv = 'タイトル,Item Content URL,メモ\r\n'
+            'カフェ,https://example.com,美味しい\r\n';
+
+        final result = parser.parseString(csv);
+
+        expect(result.headers, equals(['タイトル', 'item_content_url', 'メモ']));
+        expect(result.records[0].fields['タイトル'], equals('カフェ'));
+        expect(result.records[0].fields['item_content_url'],
+            equals('https://example.com'));
+        expect(result.records[0].fields['メモ'], equals('美味しい'));
+      });
     });
   });
 }
