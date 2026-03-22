@@ -7,6 +7,14 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      // Clear all caches to force fresh content
+      try {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      } catch (e) {
+        console.warn('Failed to clear caches:', e);
+      }
+
       try {
         await self.registration.unregister();
       } catch (e) {
