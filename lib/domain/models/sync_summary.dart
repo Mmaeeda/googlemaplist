@@ -6,6 +6,12 @@ class SyncSummary {
   final int deletedCandidateCount;
   final int skippedRowCount;
   final String? archiveName;
+  /// Number of archive groups processed
+  final int archiveGroupCount;
+  /// Number of data files (CSV/JSON) found
+  final int dataFileCount;
+  /// Total normalized records parsed
+  final int parsedRecordCount;
 
   const SyncSummary({
     required this.status,
@@ -15,6 +21,9 @@ class SyncSummary {
     this.deletedCandidateCount = 0,
     this.skippedRowCount = 0,
     this.archiveName,
+    this.archiveGroupCount = 0,
+    this.dataFileCount = 0,
+    this.parsedRecordCount = 0,
   });
 
   @override

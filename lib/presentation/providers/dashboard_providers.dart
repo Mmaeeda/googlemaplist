@@ -4,6 +4,7 @@ import '../../domain/models/app_error.dart';
 import '../../domain/models/sync_job.dart';
 import '../../domain/models/sync_summary.dart';
 import 'core_providers.dart';
+import 'places_providers.dart';
 
 // Place count (active, non-hidden)
 final placeCountProvider = FutureProvider<int>((ref) async {
@@ -48,6 +49,7 @@ class SyncActionNotifier extends Notifier<AsyncValue<SyncSummary?>> {
       ref.invalidate(placeCountProvider);
       ref.invalidate(ruleCountProvider);
       ref.invalidate(lastSyncJobProvider);
+      ref.invalidate(filteredPlacesProvider);
     } on AppError catch (e, st) {
       if (e.code == AppErrorCode.tokenExpired ||
           e.code == AppErrorCode.authRequired) {

@@ -398,6 +398,9 @@ class WebSyncOrchestrator implements SyncPipeline {
         deletedCandidateCount: diff.missingPlaceIds.length,
         skippedRowCount: totalSkippedRows,
         archiveName: archiveDisplayName,
+        archiveGroupCount: usedArchiveNames.length,
+        dataFileCount: csvCandidates.length,
+        parsedRecordCount: allNormalized.length,
       );
 
       syncTimer({
