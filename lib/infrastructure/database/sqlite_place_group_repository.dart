@@ -50,6 +50,26 @@ class SqlitePlaceGroupRepository implements PlaceGroupRepository {
   }
 
   @override
+  Future<void> replaceAllGroups(
+      String placeId, List<PlaceGroup> groups) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      // Delete ALL existing groups (auto + manual)
+      await txn.delete(
+        'place_groups',
+        where: 'place_id = ?',
+        whereArgs: [placeId],
+      );
+
+      // Insert new groups
+      for (final group in groups) {
+        await txn.insert('place_groups', group.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
+  @override
   Future<void> insertManualGroup(PlaceGroup placeGroup) async {
     final db = await _db;
     await db.insert(

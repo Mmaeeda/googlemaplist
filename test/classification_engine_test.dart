@@ -790,6 +790,13 @@ class InMemoryPlaceRepository implements PlaceRepository {
 
   @override
   Future<List<Place>> listAll() async => _places.values.toList();
+
+  @override
+  Future<void> setManualGroupOverride(String placeId, bool value) async {
+    final place = _places[placeId];
+    if (place == null) return;
+    _places[placeId] = place.copyWith(manualGroupOverride: value);
+  }
 }
 
 class InMemoryGroupRepository implements GroupRepository {
@@ -836,4 +843,11 @@ class InMemoryPlaceGroupRepository implements PlaceGroupRepository {
   @override
   Future<void> insertManualGroup(PlaceGroup placeGroup) async =>
       _groups.add(placeGroup);
+
+  @override
+  Future<void> replaceAllGroups(
+      String placeId, List<PlaceGroup> groups) async {
+    _groups.removeWhere((pg) => pg.placeId == placeId);
+    _groups.addAll(groups);
+  }
 }

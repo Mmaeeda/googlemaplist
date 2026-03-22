@@ -10,4 +10,5 @@ abstract class PlaceRepository {
   Future<List<Place>> listMissingCandidates();
   Future<List<Place>> listAllActive();
   Future<List<Place>> listAll();
+  Future<void> setManualGroupOverride(String placeId, bool value);
 }

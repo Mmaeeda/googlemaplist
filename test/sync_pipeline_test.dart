@@ -107,6 +107,13 @@ class InMemoryPlaceRepository implements PlaceRepository {
   Future<List<Place>> listAll() async {
     return _places.values.toList();
   }
+
+  @override
+  Future<void> setManualGroupOverride(String placeId, bool value) async {
+    final place = _places[placeId];
+    if (place == null) return;
+    _places[placeId] = place.copyWith(manualGroupOverride: value);
+  }
 }
 
 /// In-memory GroupRepository.
@@ -177,6 +184,12 @@ class InMemoryPlaceGroupRepository implements PlaceGroupRepository {
     _placeGroups
         .putIfAbsent(placeGroup.placeId, () => [])
         .add(placeGroup);
+  }
+
+  @override
+  Future<void> replaceAllGroups(
+      String placeId, List<PlaceGroup> groups) async {
+    _placeGroups[placeId] = groups.toList();
   }
 
   /// Helper for test assertions: get all place groups across all places.

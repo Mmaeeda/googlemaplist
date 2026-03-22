@@ -83,6 +83,13 @@ class InMemoryPlaceRepository implements PlaceRepository {
   Future<List<Place>> listAll() async {
     return _places.values.toList();
   }
+
+  @override
+  Future<void> setManualGroupOverride(String placeId, bool value) async {
+    final place = _places[placeId];
+    if (place == null) return;
+    _places[placeId] = place.copyWith(manualGroupOverride: value);
+  }
 }
 
 /// No-op SyncLogger for testing.

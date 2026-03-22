@@ -196,9 +196,18 @@ class _PlaceList extends ConsumerWidget {
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-                _EditButton(
-                  place: place,
-                  onSaved: () => ref.invalidate(filteredPlacesProvider),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _EditButton(
+                      place: place,
+                      onSaved: () => ref.invalidate(filteredPlacesProvider),
+                    ),
+                    _TagEditButton(
+                      place: place,
+                      currentGroups: item.groups,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -274,9 +283,18 @@ class _MobilePlaceItem extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      _EditButton(
-                        place: place,
-                        onSaved: () => ref.invalidate(filteredPlacesProvider),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _EditButton(
+                            place: place,
+                            onSaved: () => ref.invalidate(filteredPlacesProvider),
+                          ),
+                          _TagEditButton(
+                            place: place,
+                            currentGroups: item.groups,
+                          ),
+                        ],
                       ),
                       if (place.mapsUrl != null)
                         const Icon(Icons.open_in_new,
@@ -437,6 +455,123 @@ class _PlacePhoto extends StatelessWidget {
       radius: 22,
       backgroundColor: AppColors.surface,
       child: Icon(Icons.place, color: AppColors.textSecondary, size: 20),
+    );
+  }
+}
+
+class _TagEditButton extends ConsumerWidget {
+  final Place place;
+  final List<Group> currentGroups;
+
+  const _TagEditButton({required this.place, required this.currentGroups});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      icon: const Icon(Icons.label_outlined, size: 18),
+      color: AppColors.textSecondary,
+      tooltip: 'タグを編集',
+      onPressed: () => _showTagDialog(context, ref),
+    );
+  }
+
+  Future<void> _showTagDialog(BuildContext context, WidgetRef ref) async {
+    final allGroups = ref.read(groupListProvider);
+    final groupList = allGroups.whenOrNull(data: (list) => list);
+    if (groupList == null || groupList.isEmpty) return;
+
+    final currentIds = currentGroups.map((g) => g.id).toSet();
+
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => _TagEditDialog(
+        allGroups: groupList,
+        selectedIds: currentIds,
+      ),
+    );
+
+    if (result == null) return;
+
+    try {
+      await ref
+          .read(placeTagUpdateProvider.notifier)
+          .updateTags(place.id, result);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('タグを更新しました')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('タグの更新に失敗しました: $e')),
+        );
+      }
+    }
+  }
+}
+
+class _TagEditDialog extends StatefulWidget {
+  final List<Group> allGroups;
+  final Set<String> selectedIds;
+
+  const _TagEditDialog({
+    required this.allGroups,
+    required this.selectedIds,
+  });
+
+  @override
+  State<_TagEditDialog> createState() => _TagEditDialogState();
+}
+
+class _TagEditDialogState extends State<_TagEditDialog> {
+  late final Set<String> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set.from(widget.selectedIds);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('タグを編集'),
+      content: SizedBox(
+        width: 300,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: widget.allGroups.map((group) {
+              return CheckboxListTile(
+                title: Text(group.name),
+                value: _selected.contains(group.id),
+                onChanged: (checked) {
+                  setState(() {
+                    if (checked == true) {
+                      _selected.add(group.id);
+                    } else {
+                      _selected.remove(group.id);
+                    }
+                  });
+                },
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selected.toList()),
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

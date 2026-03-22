@@ -112,6 +112,19 @@ class SupabasePlaceRepository implements PlaceRepository {
   }
 
   @override
+  Future<void> setManualGroupOverride(String placeId, bool value) async {
+    final userId = _userId;
+    await _client
+        .from(_table)
+        .update({
+          'manual_group_override': value,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', placeId)
+        .eq('user_id', userId);
+  }
+
+  @override
   Future<List<Place>> listAll() async {
     final results = await _client
         .from(_table)

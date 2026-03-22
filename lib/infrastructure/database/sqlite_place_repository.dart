@@ -113,6 +113,20 @@ class SqlitePlaceRepository implements PlaceRepository {
     return results.map(Place.fromMap).toList();
   }
 
+  @override
+  Future<void> setManualGroupOverride(String placeId, bool value) async {
+    final db = await _db;
+    await db.update(
+      'places',
+      {
+        'manual_group_override': value ? 1 : 0,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [placeId],
+    );
+  }
+
   Future<Place?> _findById(Database db, String id) async {
     final results = await db.query(
       'places',

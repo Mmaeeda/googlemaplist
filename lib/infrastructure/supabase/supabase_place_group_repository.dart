@@ -28,6 +28,27 @@ class SupabasePlaceGroupRepository implements PlaceGroupRepository {
   }
 
   @override
+  Future<void> replaceAllGroups(
+      String placeId, List<PlaceGroup> groups) async {
+    final userId = _userId;
+
+    // Delete ALL existing groups for this place
+    await _client
+        .from(_table)
+        .delete()
+        .eq('place_id', placeId)
+        .eq('user_id', userId);
+
+    // Insert new groups
+    if (groups.isNotEmpty) {
+      final rows = groups
+          .map((g) => SupabaseHelpers.placeGroupToRow(g, userId))
+          .toList();
+      await _client.from(_table).insert(rows);
+    }
+  }
+
+  @override
   Future<List<PlaceGroup>> listByPlaceId(String placeId) async {
     final results = await _client
         .from(_table)

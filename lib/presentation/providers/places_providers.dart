@@ -124,6 +124,43 @@ class PlaceUpdateNotifier extends Notifier<AsyncValue<void>> {
   }
 }
 
+// Update a place's tag (group) assignments
+final placeTagUpdateProvider =
+    NotifierProvider<PlaceTagUpdateNotifier, AsyncValue<void>>(
+  PlaceTagUpdateNotifier.new,
+);
+
+class PlaceTagUpdateNotifier extends Notifier<AsyncValue<void>> {
+  @override
+  AsyncValue<void> build() => const AsyncData(null);
+
+  Future<void> updateTags(String placeId, List<String> groupIds) async {
+    state = const AsyncLoading();
+    try {
+      final placeGroupRepo = ref.read(placeGroupRepositoryProvider);
+      final placeRepo = ref.read(placeRepositoryProvider);
+
+      final now = DateTime.now();
+      final newGroups = groupIds
+          .map((gid) => PlaceGroup(
+                placeId: placeId,
+                groupId: gid,
+                source: 'manual',
+                createdAt: now,
+              ))
+          .toList();
+
+      await placeGroupRepo.replaceAllGroups(placeId, newGroups);
+      await placeRepo.setManualGroupOverride(placeId, true);
+
+      ref.invalidate(filteredPlacesProvider);
+      state = const AsyncData(null);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+    }
+  }
+}
+
 // Google Places API key (in-memory per session)
 final apiKeyProvider =
     NotifierProvider<ApiKeyNotifier, String?>(ApiKeyNotifier.new);
