@@ -9,11 +9,14 @@ class CsvParseResult {
   final List<RawPlaceRecord> records;
   final int skippedRowCount;
   final List<String> headers;
+  /// Total data rows (excluding header row)
+  final int totalDataRows;
 
   const CsvParseResult({
     required this.records,
     required this.skippedRowCount,
     required this.headers,
+    required this.totalDataRows,
   });
 }
 
@@ -44,6 +47,7 @@ class CsvParser {
         records: [],
         skippedRowCount: 0,
         headers: [],
+        totalDataRows: 0,
       );
     }
 
@@ -99,6 +103,7 @@ class CsvParser {
       records: records,
       skippedRowCount: skippedCount,
       headers: headers,
+      totalDataRows: rows.length - 1,
     );
   }
 

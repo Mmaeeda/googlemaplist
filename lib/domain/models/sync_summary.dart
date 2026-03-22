@@ -12,8 +12,9 @@ class SyncSummary {
   final int dataFileCount;
   /// Total normalized records parsed
   final int parsedRecordCount;
-  /// Per-file breakdown: fileName → recordCount
-  final Map<String, int> fileBreakdown;
+  /// Per-file breakdown: fileName → diagnostic string
+  /// e.g. "5件" or "0件 (0行/45B, headers: タイトル,メモ,URL)"
+  final Map<String, String> fileBreakdown;
 
   const SyncSummary({
     required this.status,

@@ -238,7 +238,7 @@ class WebSyncOrchestrator implements SyncPipeline {
       final allNormalized = <NormalizedPlaceRecord>[];
       var totalSkippedRows = 0;
       var failedCsvCount = 0;
-      final fileBreakdown = <String, int>{};
+      final fileBreakdown = <String, String>{};
 
       for (final candidate in csvCandidates) {
         try {
@@ -269,7 +269,7 @@ class WebSyncOrchestrator implements SyncPipeline {
             }
 
             final shortName = candidate.fileName.split('/').last;
-            fileBreakdown[shortName] = parseResult.records.length;
+            fileBreakdown[shortName] = '${parseResult.records.length}件';
 
             logger.info('geojson_parse_completed', {
               'fileName': candidate.fileName,
@@ -301,12 +301,37 @@ class WebSyncOrchestrator implements SyncPipeline {
             }
 
             final shortName = candidate.fileName.split('/').last;
-            fileBreakdown[shortName] = parseResult.records.length;
+            if (parseResult.records.isEmpty) {
+              // Diagnostic info for 0-record CSVs
+              final byteLen = candidate.bytes.length;
+              final headersStr = parseResult.headers.join(',');
+              fileBreakdown[shortName] =
+                  '0件 (${parseResult.totalDataRows}行/${byteLen}B, h: $headersStr)';
+
+              // Log content preview for debugging
+              final previewLen = byteLen < 500 ? byteLen : 500;
+              final preview = utf8.decode(
+                candidate.bytes.sublist(0, previewLen),
+                allowMalformed: true,
+              );
+              logger.warn('csv_zero_records', {
+                'fileName': candidate.fileName,
+                'byteLength': byteLen,
+                'totalDataRows': parseResult.totalDataRows,
+                'skippedRows': parseResult.skippedRowCount,
+                'headers': parseResult.headers,
+                'contentPreview': preview,
+              });
+            } else {
+              fileBreakdown[shortName] = '${parseResult.records.length}件';
+            }
 
             logger.info('csv_parse_completed', {
               'fileName': candidate.fileName,
               'recordCount': parseResult.records.length,
+              'totalDataRows': parseResult.totalDataRows,
               'skippedRows': parseResult.skippedRowCount,
+              'headers': parseResult.headers,
               'derivedCollectionName': csvCollectionName,
             });
           }

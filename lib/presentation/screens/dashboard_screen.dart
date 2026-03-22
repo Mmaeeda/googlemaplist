@@ -131,7 +131,7 @@ class DashboardScreen extends ConsumerWidget {
                     '同期完了: 新規${value.newCount}件 / 更新${value.updatedCount}件 / 未変更${value.unchangedCount}件\n'
                     'アーカイブ${value.archiveGroupCount}件 / データファイル${value.dataFileCount}件 / レコード${value.parsedRecordCount}件'
                     '${value.archiveName != null ? '\n${value.archiveName}' : ''}'
-                    '${value.fileBreakdown.isNotEmpty ? '\n${value.fileBreakdown.entries.map((e) => '${e.key}: ${e.value}件').join(' / ')}' : ''}',
+                    '${value.fileBreakdown.isNotEmpty ? '\n${value.fileBreakdown.entries.map((e) => '${e.key}: ${e.value}').join('\n')}' : ''}',
                     style: TextStyle(color: AppColors.primary, fontSize: 13),
                   ),
                 ),
