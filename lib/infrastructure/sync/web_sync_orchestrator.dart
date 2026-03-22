@@ -135,12 +135,15 @@ class WebSyncOrchestrator implements SyncPipeline {
         );
       }
 
-      // Step 2: Find the latest archive group that contains data files.
-      ArchiveGroup? archiveGroup;
+      // Step 2: Collect data file candidates from ALL archive groups.
+      // Multiple Takeout exports (e.g. "マップ" + "保存済み") may contain
+      // different data that must be merged for correct sync.
       var csvCandidates = <InMemoryCsvCandidate>[];
       var checkedGroupCount = 0;
       var oversizedGroupCount = 0;
       var lastDiagnosticFiles = <String>[];
+      final usedArchiveNames = <String>[];
+      final usedIdentifiers = <String>[];
 
       for (final candidateGroup in archiveGroups) {
         checkedGroupCount++;
@@ -157,26 +160,31 @@ class WebSyncOrchestrator implements SyncPipeline {
         }
 
         final discovery = await _discoverCsvCandidates(candidateGroup, logger);
-        lastDiagnosticFiles = discovery.allFileNames;
-
-        if (discovery.csvCandidates.isNotEmpty) {
-          archiveGroup = candidateGroup;
-          csvCandidates = discovery.csvCandidates;
-          logger.info('archive_with_data_selected', {
-            'archiveName': archiveGroup.displayName,
-            'archiveIdentifier': archiveGroup.identifier,
-            'dataCandidateCount': csvCandidates.length,
-          });
-          break;
+        if (discovery.allFileNames.isNotEmpty) {
+          lastDiagnosticFiles = discovery.allFileNames;
         }
 
-        logger.warn('archive_skipped_no_data_files', {
-          'archiveName': candidateGroup.displayName,
-          'allFileCount': discovery.allFileNames.length,
-        });
+        if (discovery.csvCandidates.isNotEmpty) {
+          csvCandidates.addAll(discovery.csvCandidates);
+          usedArchiveNames.add(candidateGroup.displayName);
+          usedIdentifiers.add(candidateGroup.identifier);
+          logger.info('archive_with_data_found', {
+            'archiveName': candidateGroup.displayName,
+            'archiveIdentifier': candidateGroup.identifier,
+            'dataCandidateCount': discovery.csvCandidates.length,
+          });
+        } else {
+          logger.warn('archive_skipped_no_data_files', {
+            'archiveName': candidateGroup.displayName,
+            'allFileCount': discovery.allFileNames.length,
+          });
+        }
       }
 
-      if (archiveGroup == null) {
+      // Sort all candidates by score descending
+      csvCandidates.sort((a, b) => b.score.compareTo(a.score));
+
+      if (csvCandidates.isEmpty) {
         if (oversizedGroupCount == archiveGroups.length) {
           throw AppError(
             AppErrorCode.downloadFailed,
@@ -194,14 +202,24 @@ class WebSyncOrchestrator implements SyncPipeline {
         );
       }
 
-      // Step 3: Skip if already processed
+      // Combined identifier from all contributing archives
+      final archiveIdentifier = (List<String>.from(usedIdentifiers)..sort()).join('+');
+      final archiveDisplayName = usedArchiveNames.join(' + ');
+
+      logger.info('archives_merged', {
+        'archiveCount': usedArchiveNames.length,
+        'totalCandidates': csvCandidates.length,
+        'archiveNames': usedArchiveNames,
+      });
+
+      // Step 3: Skip if already processed (all archives unchanged)
       if (!options.forceSync) {
         final latestJob = await _syncJobRepository.latest();
         if (latestJob != null &&
             latestJob.status == SyncJobStatus.success &&
-            latestJob.archiveIdentifier == archiveGroup.identifier) {
+            latestJob.archiveIdentifier == archiveIdentifier) {
           logger.info('sync_skipped_already_processed', {
-            'archiveIdentifier': archiveGroup.identifier,
+            'archiveIdentifier': archiveIdentifier,
           });
           await _syncJobRepository.complete(
             jobId,
@@ -210,7 +228,7 @@ class WebSyncOrchestrator implements SyncPipeline {
           syncTimer();
           return SyncSummary(
             status: 'success',
-            archiveName: archiveGroup.displayName,
+            archiveName: archiveDisplayName,
           );
         }
       }
@@ -379,7 +397,7 @@ class WebSyncOrchestrator implements SyncPipeline {
         unchangedCount: diff.unchangedRecords.length,
         deletedCandidateCount: diff.missingPlaceIds.length,
         skippedRowCount: totalSkippedRows,
-        archiveName: archiveGroup.displayName,
+        archiveName: archiveDisplayName,
       );
 
       syncTimer({
