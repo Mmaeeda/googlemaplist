@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'places_screen.dart';
 import 'rules_screen.dart';
+import 'settings_screen.dart';
 
 class ShellScreen extends ConsumerStatefulWidget {
   const ShellScreen({super.key});
@@ -20,6 +21,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     DashboardScreen(),
     PlacesScreen(),
     RulesScreen(),
+    SettingsScreen(),
   ];
 
   @override
@@ -76,6 +78,12 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                         isSelected: _selectedIndex == 2,
                         onTap: () => setState(() => _selectedIndex = 2),
                       ),
+                      _SidebarItem(
+                        icon: LucideIcons.settings,
+                        label: '設定',
+                        isSelected: _selectedIndex == 3,
+                        onTap: () => setState(() => _selectedIndex = 3),
+                      ),
                     ],
                   ),
                 ),
@@ -94,6 +102,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           ),
           bottomNavigationBar: isMobile
               ? BottomNavigationBar(
+                  type: BottomNavigationBarType.fixed,
                   currentIndex: _selectedIndex,
                   onTap: (index) => setState(() => _selectedIndex = index),
                   selectedItemColor: AppColors.primary,
@@ -111,6 +120,10 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                     BottomNavigationBarItem(
                       icon: Icon(LucideIcons.tags),
                       label: 'ルール',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(LucideIcons.settings),
+                      label: '設定',
                     ),
                   ],
                 )

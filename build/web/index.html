@@ -45,6 +45,29 @@
       }
     }(window.location))
   </script>
+
+  <!-- Service worker cache buster: unregister old SWs on version mismatch -->
+  <script>
+    (function() {
+      var APP_VERSION = '20260322h';
+      if ('serviceWorker' in navigator && localStorage.getItem('app_v') !== APP_VERSION) {
+        var hadSW = false;
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          hadSW = regs.length > 0;
+          return Promise.all(regs.map(function(r) { return r.unregister(); }));
+        }).then(function() {
+          return caches.keys();
+        }).then(function(names) {
+          return Promise.all(names.map(function(n) { return caches.delete(n); }));
+        }).then(function() {
+          localStorage.setItem('app_v', APP_VERSION);
+          if (hadSW) window.location.reload();
+        }).catch(function() {
+          localStorage.setItem('app_v', APP_VERSION);
+        });
+      }
+    })();
+  </script>
 </head>
 <body>
   <!--
